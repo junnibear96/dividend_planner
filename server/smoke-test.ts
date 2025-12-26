@@ -110,18 +110,15 @@ async function startApiServerIfNeeded(baseUrl: string) {
   assert(pid, 'Failed to start API server (no pid)')
 
   // Wait until the API responds.
-  let exited: { code: number | null; signal: NodeJS.Signals | null } | null = null
-  child.once('exit', (code, signal) => {
-    exited = { code, signal }
-  })
-
   const deadline = Date.now() + 45_000
   while (Date.now() < deadline) {
-    if (exited) {
+    const exitCode = child.exitCode
+    const signalCode = child.signalCode
+    if (exitCode !== null || signalCode !== null) {
       await stopApiServer(pid)
       const logs = [out.trim(), err.trim()].filter(Boolean).join('\n')
       throw new Error(
-        `API process exited early (code=${exited.code}, signal=${exited.signal ?? 'none'})` +
+        `API process exited early (code=${exitCode}, signal=${signalCode ?? 'none'})` +
           (logs ? `\n--- server output (last) ---\n${logs}` : ''),
       )
     }
