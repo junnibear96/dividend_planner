@@ -4,7 +4,7 @@ import UserAuth from '../UserAuth'
 import { useAuth } from '../auth'
 import { searchStockSymbols } from '../features/stock/stockApi'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
-import { calcDividendIncomes, type DividendFrequency } from '../utils/dividends'
+import { type DividendFrequency } from '../utils/dividends'
 
 type Holding = {
   id: string
@@ -37,6 +37,10 @@ function GuestPlanner() {
   const [dividendFrequency, setDividendFrequency] = useState<DividendFrequency>('yearly')
   const [error, setError] = useState<string | null>(null)
 
+  const [editHolding, setEditHolding] = useState<Holding | null>(null)
+  const [editShares, setEditShares] = useState('')
+  const [editDividendPerShare, setEditDividendPerShare] = useState('')
+
   const createId = () => {
     const c = globalThis.crypto
     if (c && 'randomUUID' in c && typeof c.randomUUID === 'function') return c.randomUUID()
@@ -48,25 +52,57 @@ function GuestPlanner() {
   const parsedDividendPerShare = toPositiveNumber(dividendPerShare)
   const canSubmit = Boolean(cleanedSymbol && parsedShares !== null && parsedDividendPerShare !== null)
 
+  const weeklyHoldings = useMemo(
+    () => holdings.filter((h) => h.dividendFrequency === 'weekly'),
+    [holdings],
+  )
+  const monthlyHoldings = useMemo(
+    () => holdings.filter((h) => h.dividendFrequency === 'monthly'),
+    [holdings],
+  )
+  const yearlyHoldings = useMemo(
+    () => holdings.filter((h) => h.dividendFrequency === 'yearly'),
+    [holdings],
+  )
+
+  const frequencyTotals = useMemo(() => {
+    const weekly = weeklyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
+    const monthly = monthlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
+    const yearly = yearlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
+    return { weekly, monthly, yearly }
+  }, [weeklyHoldings, monthlyHoldings, yearlyHoldings])
+
+  const annualizedTotals = useMemo(() => {
+    const annualWeekly = frequencyTotals.weekly * 4 * 12
+    const annualMonthly = frequencyTotals.monthly * 12
+    const annualYearly = frequencyTotals.yearly
+    const total = annualWeekly + annualMonthly + annualYearly
+    return { annualWeekly, annualMonthly, annualYearly, total }
+  }, [frequencyTotals])
+
   const totals = useMemo(() => {
-    const annual = holdings
-      .filter((h) => h.dividendFrequency === 'yearly')
-      .reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
+    const yearly = annualizedTotals.total
+    const monthly = yearly / 12
+    const weekly = yearly / (4 * 12)
+    return { weekly, monthly, yearly }
+  }, [annualizedTotals])
 
-    const monthly = holdings
-      .filter((h) => h.dividendFrequency === 'monthly')
-      .reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
-
-    const weekly = holdings
-      .filter((h) => h.dividendFrequency === 'weekly')
-      .reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
+  const reinvestCandidates = useMemo(() => {
+    function topSymbols(list: Holding[]) {
+      return [...list]
+        .map((h) => ({ symbol: h.symbol, income: h.shares * h.dividendPerShare }))
+        .sort((a, b) => b.income - a.income)
+        .filter((r) => Number.isFinite(r.income) && r.income > 0)
+        .slice(0, 3)
+        .map((r) => r.symbol)
+    }
 
     return {
-      annual,
-      monthly,
-      weekly,
+      weekly: topSymbols(weeklyHoldings),
+      monthly: topSymbols(monthlyHoldings),
+      yearly: topSymbols(yearlyHoldings),
     }
-  }, [holdings])
+  }, [weeklyHoldings, monthlyHoldings, yearlyHoldings])
 
   useEffect(() => {
     const q = symbol.trim()
@@ -128,16 +164,113 @@ function GuestPlanner() {
     setHoldings((prev) => prev.filter((h) => h.id !== id))
   }
 
+  function openEdit(h: Holding) {
+    setError(null)
+    setEditHolding(h)
+    setEditShares(String(h.shares))
+    setEditDividendPerShare(String(h.dividendPerShare))
+  }
+
+  function closeEdit() {
+    setEditHolding(null)
+    setEditShares('')
+    setEditDividendPerShare('')
+  }
+
+  function onEditOverlayMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.target === e.currentTarget) closeEdit()
+  }
+
+  function onEditKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Escape') closeEdit()
+  }
+
+  function onSaveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editHolding) return
+
+    const nextShares = toPositiveNumber(editShares)
+    if (nextShares === null) {
+      setError('Shares must be a positive number.')
+      return
+    }
+    const nextDividend = toPositiveNumber(editDividendPerShare)
+    if (nextDividend === null) {
+      setError('Dividend/share must be a positive number.')
+      return
+    }
+
+    setHoldings((prev) =>
+      prev.map((h) =>
+        h.id === editHolding.id ? { ...h, shares: nextShares, dividendPerShare: nextDividend } : h,
+      ),
+    )
+    closeEdit()
+  }
+
   return (
     <>
+      {editHolding ? (
+        <div
+          className="modalOverlay"
+          role="presentation"
+          onMouseDown={onEditOverlayMouseDown}
+          onKeyDown={onEditKeyDown}
+        >
+          <div className="modalDialog" role="dialog" aria-modal="true" aria-label="Edit holding">
+            <div className="modalHeader">
+              <div className="modalTitle">Edit holding ({editHolding.symbol})</div>
+              <button type="button" className="modalClose" onClick={closeEdit}>
+                Close
+              </button>
+            </div>
+
+            <form className="form" onSubmit={onSaveEdit}>
+              <label className="field">
+                <span>Shares</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editShares}
+                  onChange={(ev) => setEditShares(ev.target.value)}
+                  inputMode="decimal"
+                  placeholder="10"
+                  autoFocus
+                />
+              </label>
+              <label className="field">
+                <span>Dividend / share (USD)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editDividendPerShare}
+                  onChange={(ev) => setEditDividendPerShare(ev.target.value)}
+                  inputMode="decimal"
+                  placeholder="1.00"
+                />
+              </label>
+              <div className="actions">
+                <button type="submit">Save changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       <div className="summary" aria-label="Estimated totals">
         <div className="summaryCard">
           <div className="summaryKey">Yearly</div>
-          <div className="summaryValue">{formatMoney(totals.annual)}</div>
+          <div className="summaryValue">{formatMoney(totals.yearly)}</div>
         </div>
         <div className="summaryCard">
           <div className="summaryKey">Monthly</div>
           <div className="summaryValue">{formatMoney(totals.monthly)}</div>
+        </div>
+        <div className="summaryCard">
+          <div className="summaryKey">Weekly</div>
+          <div className="summaryValue">{formatMoney(totals.weekly)}</div>
         </div>
       </div>
 
@@ -200,12 +333,177 @@ function GuestPlanner() {
             {error}
           </p>
         ) : (
-          <p className="hint">Guest mode: your holdings are not saved.</p>
+          <p className="hint">Tip: enter dividend per share for the selected frequency in USD.</p>
         )}
       </section>
 
       <section className="panel">
-        <h2>Portfolio</h2>
+        <h2>Weekly dividend income</h2>
+        {weeklyHoldings.length === 0 ? (
+          <p className="empty">No weekly dividend holdings.</p>
+        ) : (
+          <>
+            <p className="hint">
+              Reinvest candidates:{' '}
+              {reinvestCandidates.weekly.length ? reinvestCandidates.weekly.join(', ') : '—'}
+            </p>
+            <div className="tableWrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th className="num">Shares</th>
+                    <th className="num">Dividend / share</th>
+                    <th className="num">Weekly income</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {weeklyHoldings.map((h) => (
+                    <tr key={h.id}>
+                      <td className="mono">{h.symbol}</td>
+                      <td className="num">{h.shares}</td>
+                      <td className="num">{formatMoney(h.dividendPerShare)}</td>
+                      <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
+                      <td className="num">
+                        <button type="button" className="linkButton" onClick={() => openEdit(h)}>
+                          Edit
+                        </button>
+                        <span aria-hidden="true">&nbsp;&nbsp;</span>
+                        <button type="button" className="linkButton" onClick={() => removeHolding(h.id)}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="totalsLabel">
+                      Total (weekly holdings)
+                    </td>
+                    <td className="num totalsValue">{formatMoney(frequencyTotals.weekly)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Monthly dividend income</h2>
+        {monthlyHoldings.length === 0 ? (
+          <p className="empty">No monthly dividend holdings.</p>
+        ) : (
+          <>
+            <p className="hint">
+              Reinvest candidates:{' '}
+              {reinvestCandidates.monthly.length ? reinvestCandidates.monthly.join(', ') : '—'}
+            </p>
+            <div className="tableWrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th className="num">Shares</th>
+                    <th className="num">Dividend / share</th>
+                    <th className="num">Monthly income</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyHoldings.map((h) => (
+                    <tr key={h.id}>
+                      <td className="mono">{h.symbol}</td>
+                      <td className="num">{h.shares}</td>
+                      <td className="num">{formatMoney(h.dividendPerShare)}</td>
+                      <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
+                      <td className="num">
+                        <button type="button" className="linkButton" onClick={() => openEdit(h)}>
+                          Edit
+                        </button>
+                        <span aria-hidden="true">&nbsp;&nbsp;</span>
+                        <button type="button" className="linkButton" onClick={() => removeHolding(h.id)}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="totalsLabel">
+                      Total (monthly holdings)
+                    </td>
+                    <td className="num totalsValue">{formatMoney(frequencyTotals.monthly)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Yearly dividend income</h2>
+        {yearlyHoldings.length === 0 ? (
+          <p className="empty">No yearly dividend holdings.</p>
+        ) : (
+          <>
+            <p className="hint">
+              Reinvest candidates:{' '}
+              {reinvestCandidates.yearly.length ? reinvestCandidates.yearly.join(', ') : '—'}
+            </p>
+            <div className="tableWrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th className="num">Shares</th>
+                    <th className="num">Dividend / share</th>
+                    <th className="num">Yearly income</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {yearlyHoldings.map((h) => (
+                    <tr key={h.id}>
+                      <td className="mono">{h.symbol}</td>
+                      <td className="num">{h.shares}</td>
+                      <td className="num">{formatMoney(h.dividendPerShare)}</td>
+                      <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
+                      <td className="num">
+                        <button type="button" className="linkButton" onClick={() => openEdit(h)}>
+                          Edit
+                        </button>
+                        <span aria-hidden="true">&nbsp;&nbsp;</span>
+                        <button type="button" className="linkButton" onClick={() => removeHolding(h.id)}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="totalsLabel">
+                      Total (yearly holdings)
+                    </td>
+                    <td className="num totalsValue">{formatMoney(frequencyTotals.yearly)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Total dividend (annualized estimate)</h2>
         {holdings.length === 0 ? (
           <p className="empty">No holdings yet.</p>
         ) : (
@@ -213,52 +511,20 @@ function GuestPlanner() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Symbol</th>
-                  <th className="num">Shares</th>
-                  <th className="num">Yearly income</th>
-                  <th className="num">Monthly income</th>
-                  <th className="num">Weekly income</th>
-                  <th />
+                  <th className="num">Weekly total</th>
+                  <th className="num">Monthly total</th>
+                  <th className="num">Yearly total</th>
+                  <th className="num">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {holdings.map((h) => {
-                  const income = calcDividendIncomes(
-                    h.shares,
-                    h.dividendPerShare,
-                    h.dividendFrequency,
-                  )
-                  return (
-                    <tr key={h.id}>
-                      <td className="mono">{h.symbol}</td>
-                      <td className="num">{h.shares}</td>
-                      <td className="num">{formatMoney(income.yearly)}</td>
-                      <td className="num">{formatMoney(income.monthly)}</td>
-                      <td className="num">{formatMoney(income.weekly)}</td>
-                      <td className="num">
-                        <button
-                          type="button"
-                          className="linkButton"
-                          onClick={() => removeHolding(h.id)}
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot>
                 <tr>
-                  <td colSpan={2} className="totalsLabel">
-                    Total (estimated)
-                  </td>
-                  <td className="num totalsValue">{formatMoney(totals.annual)}</td>
-                  <td className="num totalsValue">{formatMoney(totals.monthly)}</td>
-                  <td className="num totalsValue">{formatMoney(totals.weekly)}</td>
-                  <td />
+                  <td className="num">{formatMoney(annualizedTotals.annualWeekly)}</td>
+                  <td className="num">{formatMoney(annualizedTotals.annualMonthly)}</td>
+                  <td className="num">{formatMoney(annualizedTotals.annualYearly)}</td>
+                  <td className="num">{formatMoney(annualizedTotals.total)}</td>
                 </tr>
-              </tfoot>
+              </tbody>
             </table>
           </div>
         )}

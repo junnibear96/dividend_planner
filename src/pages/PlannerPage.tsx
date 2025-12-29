@@ -586,7 +586,7 @@ export default function PlannerPage() {
                           >
                             Edit
                           </button>
-                          <span aria-hidden="true">&nbsp;·&nbsp;</span>
+                          <span aria-hidden="true">&nbsp;&nbsp;</span>
                           <button
                             type="button"
                             className="linkButton"
@@ -652,7 +652,7 @@ export default function PlannerPage() {
                           >
                             Edit
                           </button>
-                          <span aria-hidden="true">&nbsp;·&nbsp;</span>
+                          <span aria-hidden="true">&nbsp;&nbsp;</span>
                           <button
                             type="button"
                             className="linkButton"
@@ -718,7 +718,7 @@ export default function PlannerPage() {
                           >
                             Edit
                           </button>
-                          <span aria-hidden="true">&nbsp;·&nbsp;</span>
+                          <span aria-hidden="true">&nbsp;&nbsp;</span>
                           <button
                             type="button"
                             className="linkButton"
