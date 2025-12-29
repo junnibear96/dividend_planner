@@ -197,7 +197,12 @@ async function main() {
     const add1 = await requestJson(baseUrl, '/api/holdings', {
       method: 'POST',
       session: reg1.session,
-      body: JSON.stringify({ symbol: 'AAPL', shares: 10, annualDividendPerShare: 0.96 }),
+      body: JSON.stringify({
+        symbol: 'AAPL',
+        shares: 10,
+        dividendPerShare: 0.96,
+        dividendFrequency: 'yearly',
+      }),
     })
     assert(add1.status === 201, `add holding u1 failed: status=${add1.status} body=${JSON.stringify(add1.json)}`)
 
@@ -225,7 +230,12 @@ async function main() {
     const add2 = await requestJson(baseUrl, '/api/holdings', {
       method: 'POST',
       session: reg2.session,
-      body: JSON.stringify({ symbol: 'MSFT', shares: 5, annualDividendPerShare: 3.0 }),
+      body: JSON.stringify({
+        symbol: 'MSFT',
+        shares: 5,
+        dividendPerShare: 3.0,
+        dividendFrequency: 'yearly',
+      }),
     })
     assert(add2.status === 201, `add holding u2 failed: status=${add2.status} body=${JSON.stringify(add2.json)}`)
 

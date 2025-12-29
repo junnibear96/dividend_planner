@@ -1,3 +1,47 @@
+# Dividend Planner
+
+This repo contains:
+- A Vite + React + TypeScript web app (dev: `http://localhost:5173`)
+- An Express + MySQL/MariaDB API server (dev: `http://localhost:5174`)
+
+The web app proxies `/api/*` to the API server via Vite config.
+
+## Run locally
+
+### 1) Configure environment
+
+- Create a `.env` file at the repo root (you can copy from `.env.example`).
+- You must set these variables for the API to start:
+  - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`
+  - `AUTH_JWT_SECRET`
+  - `EODHD_API_TOKEN` (used by `/api/stocks/:symbol` caching endpoint)
+
+### 2) Install
+
+If PowerShell blocks `npm` with an execution policy error, use `npm.cmd`.
+
+```bash
+npm.cmd install
+```
+
+### 3) Check DB connection (optional but recommended)
+
+```bash
+npm.cmd run db:check
+```
+
+### 4) Start web + API together
+
+```bash
+npm.cmd run dev:all
+```
+
+Open:
+- Web: `http://localhost:5173`
+- API health: `http://localhost:5174/api/health`
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

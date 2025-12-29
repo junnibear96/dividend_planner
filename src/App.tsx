@@ -2,6 +2,7 @@ import './App.css'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import PlannerPage from './pages/PlannerPage'
+import StockPage from './pages/StockPage'
 import { HomeRedirect, ProtectedRoute } from './routes'
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<HomeRedirect />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/stock" element={<StockPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/planner" element={<PlannerPage />} />
       </Route>
