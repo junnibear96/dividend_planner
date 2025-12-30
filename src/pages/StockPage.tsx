@@ -276,13 +276,15 @@ export default function StockPage() {
                     tick={{ fontSize: 12 }}
                     width={56}
                     domain={['auto', 'auto']}
-                    tickFormatter={(v) => (typeof v === 'number' ? v.toFixed(2) : String(v))}
+                    tickFormatter={(v: string | number) =>
+                      typeof v === 'number' ? v.toFixed(2) : String(v)
+                    }
                   />
                   <Tooltip
-                    formatter={(value) =>
-                      typeof value === 'number' ? formatMoney2(value) : String(value)
+                    formatter={(value: string | number | undefined) =>
+                      typeof value === 'number' ? formatMoney2(value) : String(value ?? '')
                     }
-                    labelFormatter={(label) => String(label)}
+                    labelFormatter={(label: string | number) => String(label)}
                   />
                   <Line
                     type="monotone"

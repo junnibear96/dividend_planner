@@ -17,10 +17,69 @@ CREATE TABLE IF NOT EXISTS holdings (
   shares DECIMAL(18,6) NOT NULL,
   dividend_per_share DECIMAL(18,6) NOT NULL,
   dividend_frequency VARCHAR(16) NOT NULL,
+  include_in_reinvestment TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_holdings_user_created_at (user_id, created_at),
   INDEX idx_holdings_created_at (created_at)
+);
+
+-- Reinvestment system (dividends accrue into a cash pool and are reinvested on a schedule)
+
+CREATE TABLE IF NOT EXISTS dividend_accruals (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  symbol VARCHAR(16) NOT NULL,
+  amount DECIMAL(18,6) NOT NULL,
+  accrual_date DATE NOT NULL,
+  frequency VARCHAR(16) NOT NULL,
+  consumed_execution_id CHAR(36) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_accruals_user_date (user_id, accrual_date),
+  INDEX idx_accruals_user_symbol (user_id, symbol),
+  INDEX idx_accruals_user_consumed (user_id, consumed_execution_id)
+);
+
+CREATE TABLE IF NOT EXISTS dividend_cash_pool (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  available_balance DECIMAL(18,6) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_cash_pool_user (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS reinvestment_rules (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  enabled TINYINT(1) NOT NULL,
+  source_scope VARCHAR(16) NOT NULL,
+  destination_type VARCHAR(32) NOT NULL,
+  destination_assets JSON NOT NULL,
+  schedule_mode VARCHAR(24) NOT NULL DEFAULT 'FIXED',
+  frequency VARCHAR(16) NOT NULL,
+  week_destinations JSON NULL,
+  minimum_amount DECIMAL(18,6) NOT NULL,
+  fractional_shares_allowed TINYINT(1) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_rules_user_updated (user_id, updated_at)
+);
+
+CREATE TABLE IF NOT EXISTS reinvestment_executions (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  rule_id CHAR(36) NOT NULL,
+  execution_date DATE NOT NULL,
+  week_index TINYINT NULL,
+  total_amount DECIMAL(18,6) NOT NULL,
+  execution_details JSON NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_exec_user_date (user_id, execution_date),
+  INDEX idx_exec_user_week (user_id, week_index, execution_date),
+  INDEX idx_exec_rule_date (rule_id, execution_date)
 );
 
 -- Cached stock data (filled on-demand by /api/stocks/:symbol)

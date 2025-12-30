@@ -97,16 +97,6 @@ input {
   outline: none;
 }
 
-select {
-  box-sizing: border-box;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.2);
-  color: var(--text);
-  padding: 0.55rem 0.65rem;
-  outline: none;
-}
-
 input::placeholder {
   color: color-mix(in oklab, var(--muted) 70%, transparent);
 }
@@ -119,6 +109,16 @@ input:focus {
 select:focus {
   border-color: color-mix(in oklab, var(--accent) 65%, var(--border));
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 25%, transparent);
+}
+
+select {
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  padding: 0.55rem 0.65rem;
+  outline: none;
 }
 
 @media (prefers-color-scheme: light) {

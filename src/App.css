@@ -21,6 +21,7 @@
 .loginGrid {
   display: grid;
   grid-template-columns: 1fr;
+  gap: 1.25rem;
   grid-template-areas:
     'hero'
     'planner'
@@ -69,7 +70,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: color-mix(in oklab, var(--bg) 70%, transparent);
+  background: color-mix(in oklab, var(--bg) 85%, transparent);
 }
 
 .modalDialog {
@@ -78,7 +79,90 @@
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 16px;
-  padding: 0.9rem;
+  padding: 1rem 1.1rem;
+  max-height: min(94vh, 920px);
+  overflow: auto;
+}
+
+.modalDialog.modalScrollable {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modalDialog.modalScrollable .modalTabs {
+  flex: 0 0 auto;
+}
+
+.modalDialog.modalScrollable .modalBody {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+
+.modalWide {
+  max-width: 1100px;
+}
+
+.actionsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.modalDialog .field > input,
+.modalDialog .field > select {
+  width: 100%;
+}
+
+.modalDialog .linkButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.6rem;
+  background: color-mix(in oklab, var(--surface) 85%, transparent);
+  color: var(--text);
+  text-decoration: none;
+  opacity: 0.9;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.modalDialog .linkButton:hover {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+}
+
+.modalDialog .fieldLabelRow {
+  align-items: baseline;
+}
+
+.modalDialog .fieldLabelRow .linkButton {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.85rem;
+}
+
+.modalDialog .tableWrap.modalTableWrap {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.modalDialog .tableWrap.modalTableWrap .table th,
+.modalDialog .tableWrap.modalTableWrap .table td {
+  padding: 0.45rem 0.45rem;
+}
+
+.modalDialog .tableWrap.modalTableWrap input {
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
 }
 
 .modalHeader {
@@ -87,6 +171,12 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
+}
+
+.modalTabs {
+  margin: -0.35rem -0.35rem 0.9rem;
+  padding: 0 0.35rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .modalTitle {
@@ -465,6 +555,17 @@
   }
 }
 
+.form.modalForm {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+@media (min-width: 768px) {
+  .form.modalForm {
+    grid-template-columns: 1fr;
+  }
+}
+
 .field {
   display: grid;
   gap: 0.35rem;
@@ -479,6 +580,102 @@
 
 .fieldLabelRow select {
   width: auto;
+}
+
+.weekTabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+
+.weekTab {
+  padding: 0.45rem 0.7rem;
+  line-height: 1;
+  border-radius: 12px 12px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: color-mix(in oklab, var(--surface) 65%, transparent);
+  box-shadow: none;
+  transform: none;
+}
+
+.weekTab:hover {
+  transform: none;
+}
+
+.weekTabActive {
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--border));
+  background: var(--surface);
+  margin-bottom: -1px;
+}
+
+.weekPreviewRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 720px) {
+  .weekPreviewRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.weekPreviewCard {
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 85%, transparent);
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+  transform: none;
+}
+
+.weekPreviewCard:hover {
+  transform: none;
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+}
+
+.weekPreviewCardActive {
+  border-color: color-mix(in oklab, var(--accent) 65%, var(--border));
+}
+
+.weekPreviewWeek {
+  font-size: 0.78rem;
+  opacity: 0.8;
+  font-weight: 650;
+}
+
+.weekPreviewValue {
+  margin-top: 0.15rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panelTabsHeader {
+  margin: -1rem -1rem 0;
+  padding: 0.75rem 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.panelTabsTopRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.panelTabsTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
 }
 
 .field > span {
@@ -647,15 +844,5 @@
 
   .divSummary {
     grid-template-columns: 1fr;
-  }
-
-  .form {
-    grid-template-columns: 1fr;
-  }
-  .actions {
-    justify-content: stretch;
-  }
-  .actions button {
-    width: 100%;
   }
 }

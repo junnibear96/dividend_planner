@@ -5,6 +5,11 @@ import { randomUUID } from 'node:crypto'
 import cookieParser from 'cookie-parser'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import {
+  listReinvestmentExecutions,
+  processPortfolioForReinvestment,
+  updateReinvestmentRule,
+} from './reinvestment'
 
 type HoldingRow = {
   id: string
@@ -12,6 +17,7 @@ type HoldingRow = {
   shares: number
   dividendPerShare: number
   dividendFrequency: 'weekly' | 'monthly' | 'yearly'
+  includeInReinvestment: boolean
   createdAt: string
 }
 
@@ -51,7 +57,8 @@ const pool = mysql.createPool({
 })
 
 const jwtSecret = requireEnv('AUTH_JWT_SECRET')
-const eodhdToken = requireEnv('EODHD_API_TOKEN')
+const eodhdToken = process.env.EODHD_API_TOKEN ?? ''
+const hasEodhdToken = Boolean(eodhdToken)
 
 function redactEodhdUrl(rawUrl: string): string {
   try {
@@ -74,6 +81,7 @@ async function eodhdFetchJson(url: string): Promise<unknown> {
 }
 
 async function fetchRealTimeFromEodhd(symbol: string): Promise<unknown> {
+  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
   const url = `https://eodhd.com/api/real-time/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
     eodhdToken,
   )}&fmt=json`
@@ -81,6 +89,7 @@ async function fetchRealTimeFromEodhd(symbol: string): Promise<unknown> {
 }
 
 async function fetchEodFromEodhd(symbol: string, limit: number): Promise<unknown[]> {
+  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
   const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
     eodhdToken,
   )}&fmt=json&limit=${encodeURIComponent(String(limit))}`
@@ -89,6 +98,7 @@ async function fetchEodFromEodhd(symbol: string, limit: number): Promise<unknown
 }
 
 async function fetchDividendsFromEodhd(symbol: string): Promise<unknown[]> {
+  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
   const url = `https://eodhd.com/api/div/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
     eodhdToken,
   )}&fmt=json`
@@ -116,10 +126,75 @@ async function ensureSchema() {
       shares DECIMAL(18,6) NOT NULL,
       dividend_per_share DECIMAL(18,6) NOT NULL,
       dividend_frequency VARCHAR(16) NOT NULL,
+      include_in_reinvestment TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       INDEX idx_holdings_user_created_at (user_id, created_at),
       INDEX idx_holdings_created_at (created_at)
+    )`,
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS dividend_accruals (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      symbol VARCHAR(16) NOT NULL,
+      amount DECIMAL(18,6) NOT NULL,
+      accrual_date DATE NOT NULL,
+      frequency VARCHAR(16) NOT NULL,
+      consumed_execution_id CHAR(36) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      INDEX idx_accruals_user_date (user_id, accrual_date),
+      INDEX idx_accruals_user_symbol (user_id, symbol),
+      INDEX idx_accruals_user_consumed (user_id, consumed_execution_id)
+    )`,
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS dividend_cash_pool (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      available_balance DECIMAL(18,6) NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_cash_pool_user (user_id)
+    )`,
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS reinvestment_rules (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      enabled TINYINT(1) NOT NULL,
+      source_scope VARCHAR(16) NOT NULL,
+      destination_type VARCHAR(32) NOT NULL,
+      destination_assets JSON NOT NULL,
+      schedule_mode VARCHAR(24) NOT NULL DEFAULT 'FIXED',
+      frequency VARCHAR(16) NOT NULL,
+      week_destinations JSON NULL,
+      minimum_amount DECIMAL(18,6) NOT NULL,
+      fractional_shares_allowed TINYINT(1) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      INDEX idx_rules_user_updated (user_id, updated_at)
+    )`,
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS reinvestment_executions (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      rule_id CHAR(36) NOT NULL,
+      execution_date DATE NOT NULL,
+      week_index TINYINT NULL,
+      total_amount DECIMAL(18,6) NOT NULL,
+      execution_details JSON NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      INDEX idx_exec_user_date (user_id, execution_date),
+      INDEX idx_exec_user_week (user_id, week_index, execution_date),
+      INDEX idx_exec_rule_date (rule_id, execution_date)
     )`,
   )
 
@@ -188,6 +263,52 @@ async function ensureSchema() {
     }
   }
 
+  // Migrate reinvestment rules for week-of-month scheduling.
+  const [ruleScheduleCol] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'reinvestment_rules'
+       AND column_name = 'schedule_mode'`,
+  )
+  const hasScheduleMode = Number((ruleScheduleCol[0] as { count: number }).count) > 0
+  if (!hasScheduleMode) {
+    await pool.execute(
+      `ALTER TABLE reinvestment_rules ADD COLUMN schedule_mode VARCHAR(24) NOT NULL DEFAULT 'FIXED' AFTER destination_assets`,
+    )
+  }
+
+  const [ruleWeekDestCol] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'reinvestment_rules'
+       AND column_name = 'week_destinations'`,
+  )
+  const hasWeekDest = Number((ruleWeekDestCol[0] as { count: number }).count) > 0
+  if (!hasWeekDest) {
+    await pool.execute(
+      `ALTER TABLE reinvestment_rules ADD COLUMN week_destinations JSON NULL AFTER frequency`,
+    )
+  }
+
+  const [execWeekIdxCol] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'reinvestment_executions'
+       AND column_name = 'week_index'`,
+  )
+  const hasWeekIndex = Number((execWeekIdxCol[0] as { count: number }).count) > 0
+  if (!hasWeekIndex) {
+    await pool.execute(
+      `ALTER TABLE reinvestment_executions ADD COLUMN week_index TINYINT NULL AFTER execution_date`,
+    )
+    await pool.execute(
+      `CREATE INDEX idx_exec_user_week ON reinvestment_executions (user_id, week_index, execution_date)`,
+    )
+  }
+
   // If upgrading from an older schema, add dividend columns if missing.
   const [divColRows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT
@@ -212,6 +333,22 @@ async function ensureSchema() {
     await pool.execute(
       `ALTER TABLE holdings
        ADD COLUMN dividend_per_share DECIMAL(18,6) NOT NULL DEFAULT 0 AFTER shares`,
+    )
+  }
+
+  // If upgrading from an older schema, add include_in_reinvestment if missing.
+  const [incRows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'holdings'
+       AND column_name = 'include_in_reinvestment'`,
+  )
+  const hasIncludeInReinvestment = Number((incRows[0] as { count: number }).count) > 0
+  if (!hasIncludeInReinvestment) {
+    await pool.execute(
+      `ALTER TABLE holdings
+       ADD COLUMN include_in_reinvestment TINYINT(1) NOT NULL DEFAULT 1 AFTER dividend_frequency`,
     )
   }
   if (!hasDividendFrequency) {
@@ -477,6 +614,21 @@ app.get('/api/stocks/:symbol', async (req, res) => {
     let eod = await loadStockEod(symbol, limit)
     let dividends = await loadStockDividends(symbol, dividendsLimit)
 
+    if (!hasEodhdToken) {
+      const missing: string[] = []
+      if (!realtime) missing.push('realtime')
+      if (eod.length === 0) missing.push('eod')
+      if (dividends.length === 0) missing.push('dividends')
+      if (missing.length > 0) {
+        res.status(503).json({
+          error:
+            `Missing EODHD_API_TOKEN (server env). Cannot fetch: ${missing.join(', ')}. ` +
+            `Set EODHD_API_TOKEN or request a symbol already cached in DB.`,
+        })
+        return
+      }
+    }
+
     if (!realtime) {
       const rt = await fetchRealTimeFromEodhd(symbol)
       await upsertStockRealtime(symbol, rt)
@@ -605,6 +757,9 @@ app.get('/api/holdings', async (_req, res) => {
       res.status(401).json({ error: 'Not authenticated' })
       return
     }
+
+    // Accrue dividends + run scheduled reinvestment deterministically on reads.
+    await processPortfolioForReinvestment(pool, user.id)
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
       `SELECT 
         id,
@@ -612,6 +767,7 @@ app.get('/api/holdings', async (_req, res) => {
         shares,
         dividend_per_share AS dividendPerShare,
         dividend_frequency AS dividendFrequency,
+        include_in_reinvestment AS includeInReinvestment,
         created_at AS createdAt
       FROM holdings
       WHERE user_id = :userId
@@ -619,8 +775,15 @@ app.get('/api/holdings', async (_req, res) => {
       { userId: user.id },
     )
 
+    const holdings = (rows as unknown as HoldingRow[]).map((h) => ({
+      ...h,
+      includeInReinvestment: Boolean(
+        (h as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
+      ),
+    }))
+
     res.json({
-      holdings: rows as unknown as HoldingRow[],
+      holdings,
     })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'DB error' })
@@ -642,6 +805,7 @@ app.post('/api/holdings', async (req, res) => {
     const shares = Number(req.body?.shares)
     const dividendPerShare = Number(req.body?.dividendPerShare)
     const dividendFrequency = String(req.body?.dividendFrequency ?? '').trim().toLowerCase()
+    const includeInReinvestment = req.body?.includeInReinvestment
 
     if (!symbol) {
       res.status(400).json({ error: 'Symbol is required' })
@@ -666,6 +830,8 @@ app.post('/api/holdings', async (req, res) => {
 
     const id = randomUUID()
 
+    const includeValue = includeInReinvestment === undefined ? 1 : Boolean(includeInReinvestment) ? 1 : 0
+
     await pool.execute(
       `INSERT INTO holdings (
         id,
@@ -673,7 +839,8 @@ app.post('/api/holdings', async (req, res) => {
         symbol,
         shares,
         dividend_per_share,
-        dividend_frequency
+        dividend_frequency,
+        include_in_reinvestment
       )
        VALUES (
         :id,
@@ -681,9 +848,18 @@ app.post('/api/holdings', async (req, res) => {
         :symbol,
         :shares,
         :dividendPerShare,
-        :dividendFrequency
+        :dividendFrequency,
+        :includeInReinvestment
       )`,
-      { id, userId: user.id, symbol, shares, dividendPerShare, dividendFrequency },
+      {
+        id,
+        userId: user.id,
+        symbol,
+        shares,
+        dividendPerShare,
+        dividendFrequency,
+        includeInReinvestment: includeValue,
+      },
     )
 
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
@@ -693,6 +869,7 @@ app.post('/api/holdings', async (req, res) => {
         shares,
         dividend_per_share AS dividendPerShare,
         dividend_frequency AS dividendFrequency,
+        include_in_reinvestment AS includeInReinvestment,
         created_at AS createdAt
       FROM holdings
       WHERE id = :id AND user_id = :userId`,
@@ -700,7 +877,16 @@ app.post('/api/holdings', async (req, res) => {
     )
 
     const holding = rows[0] as unknown as HoldingRow | undefined
-    res.status(201).json({ holding })
+    res.status(201).json({
+      holding: holding
+        ? {
+            ...holding,
+            includeInReinvestment: Boolean(
+              (holding as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
+            ),
+          }
+        : undefined,
+    })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'DB error' })
   }
@@ -721,24 +907,49 @@ app.patch('/api/holdings/:id', async (req, res) => {
       return
     }
 
-    const shares = Number(req.body?.shares)
-    const dividendPerShare = Number(req.body?.dividendPerShare)
+    const patchShares = req.body?.shares
+    const patchDividend = req.body?.dividendPerShare
+    const patchInclude = req.body?.includeInReinvestment
 
-    if (!Number.isFinite(shares) || shares <= 0) {
-      res.status(400).json({ error: 'Shares must be a positive number' })
-      return
+    const updates: string[] = []
+    const params: Record<string, unknown> = { id, userId: user.id }
+
+    if (patchShares !== undefined) {
+      const shares = Number(patchShares)
+      if (!Number.isFinite(shares) || shares <= 0) {
+        res.status(400).json({ error: 'Shares must be a positive number' })
+        return
+      }
+      updates.push('shares = :shares')
+      params.shares = shares
     }
-    if (!Number.isFinite(dividendPerShare) || dividendPerShare <= 0) {
-      res.status(400).json({ error: 'Dividend/share must be a positive number' })
+
+    if (patchDividend !== undefined) {
+      const dividendPerShare = Number(patchDividend)
+      if (!Number.isFinite(dividendPerShare) || dividendPerShare < 0) {
+        res.status(400).json({ error: 'Dividend/share must be a non-negative number' })
+        return
+      }
+      updates.push('dividend_per_share = :dividendPerShare')
+      params.dividendPerShare = dividendPerShare
+    }
+
+    if (patchInclude !== undefined) {
+      const include = Boolean(patchInclude)
+      updates.push('include_in_reinvestment = :includeInReinvestment')
+      params.includeInReinvestment = include ? 1 : 0
+    }
+
+    if (updates.length === 0) {
+      res.status(400).json({ error: 'No fields to update' })
       return
     }
 
     const [result] = await pool.execute<mysql.ResultSetHeader>(
       `UPDATE holdings
-       SET shares = :shares,
-           dividend_per_share = :dividendPerShare
+       SET ${updates.join(', ')}
        WHERE id = :id AND user_id = :userId`,
-      { id, userId: user.id, shares, dividendPerShare },
+      params,
     )
 
     if (result.affectedRows === 0) {
@@ -753,6 +964,7 @@ app.patch('/api/holdings/:id', async (req, res) => {
         shares,
         dividend_per_share AS dividendPerShare,
         dividend_frequency AS dividendFrequency,
+        include_in_reinvestment AS includeInReinvestment,
         created_at AS createdAt
       FROM holdings
       WHERE id = :id AND user_id = :userId`,
@@ -760,9 +972,93 @@ app.patch('/api/holdings/:id', async (req, res) => {
     )
 
     const holding = rows[0] as unknown as HoldingRow | undefined
-    res.json({ holding })
+    res.json({
+      holding: holding
+        ? {
+            ...holding,
+            includeInReinvestment: Boolean(
+              (holding as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
+            ),
+          }
+        : undefined,
+    })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'DB error' })
+  }
+})
+
+app.get('/api/reinvestment/summary', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const processed = await processPortfolioForReinvestment(pool, user.id)
+    res.json({
+      dividendCashAvailable: processed.pool.availableBalance,
+      nextReinvestmentDate: processed.nextReinvestmentDate,
+      rule: processed.rule,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.put('/api/reinvestment/rule', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const rule = await updateReinvestmentRule(pool, user.id, {
+      enabled: Boolean(req.body?.enabled),
+      sourceScope: String(req.body?.sourceScope ?? 'ALL') as any,
+      destinationType: String(req.body?.destinationType ?? 'SAME_AS_SOURCE') as any,
+      destinationAssets: Array.isArray(req.body?.destinationAssets)
+        ? (req.body.destinationAssets as any)
+        : [],
+      scheduleMode: String(req.body?.scheduleMode ?? 'FIXED') as any,
+      frequency: String(req.body?.frequency ?? 'weekly') as any,
+      weekDestinations:
+        req.body?.weekDestinations && typeof req.body.weekDestinations === 'object'
+          ? (req.body.weekDestinations as any)
+          : undefined,
+      minimumAmount: Number(req.body?.minimumAmount ?? 0),
+      fractionalSharesAllowed: Boolean(req.body?.fractionalSharesAllowed),
+    })
+
+    const processed = await processPortfolioForReinvestment(pool, user.id)
+    res.json({
+      rule,
+      nextReinvestmentDate: processed.nextReinvestmentDate,
+      dividendCashAvailable: processed.pool.availableBalance,
+    })
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Bad request' })
+  }
+})
+
+app.get('/api/reinvestment/history', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    await processPortfolioForReinvestment(pool, user.id)
+    const limit = Math.max(1, Math.min(200, Math.floor(Number(req.query.limit ?? '50'))))
+    const executions = await listReinvestmentExecutions(pool, user.id, limit)
+    res.json({ executions })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
 })
 
