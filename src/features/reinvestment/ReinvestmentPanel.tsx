@@ -66,8 +66,14 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
   const [isReinvestmentHistoryLoading, setIsReinvestmentHistoryLoading] = useState(false)
 
   const [draftRule, setDraftRule] = useState<ReinvestmentRule | null>(null)
+  const [baselineRule, setBaselineRule] = useState<ReinvestmentRule | null>(null)
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const [isRuleSaving, setIsRuleSaving] = useState(false)
   const editWeek = props.activeWeek
+
+  function cloneRule(rule: ReinvestmentRule): ReinvestmentRule {
+    return JSON.parse(JSON.stringify(rule)) as ReinvestmentRule
+  }
 
   const loadReinvestmentSummary = useCallback(async () => {
     try {
@@ -75,12 +81,15 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
       setReinvestmentSummaryError(null)
       const next = await fetchReinvestmentSummary()
       const normalized = normalizeRule(next.rule)
+      const forcedEnabled: ReinvestmentRule = { ...normalized, enabled: true }
       setReinvestmentSummary(next)
-      setDraftRule(normalized)
-      props.onScheduleModeChange?.(normalized.scheduleMode)
+      setDraftRule(cloneRule(forcedEnabled))
+      setBaselineRule(cloneRule(forcedEnabled))
+      props.onScheduleModeChange?.(forcedEnabled.scheduleMode)
     } catch (err) {
       setReinvestmentSummary(null)
       setDraftRule(null)
+      setBaselineRule(null)
       setReinvestmentSummaryError(err instanceof Error ? err.message : 'Failed to load reinvestment summary')
     } finally {
       setIsReinvestmentSummaryLoading(false)
@@ -105,6 +114,15 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
     void loadReinvestmentSummary()
     void loadReinvestmentHistory()
   }, [loadReinvestmentSummary, loadReinvestmentHistory])
+
+  useEffect(() => {
+    if (!isResetConfirmOpen) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setIsResetConfirmOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isResetConfirmOpen])
 
   const historyRows = useMemo(() => {
     const rows: Array<{
@@ -157,7 +175,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
     try {
       setIsRuleSaving(true)
       await updateReinvestmentRule({
-        enabled: rule.enabled,
+        enabled: true,
         sourceScope: rule.sourceScope,
         destinationType: rule.destinationType,
         destinationAssets: rule.destinationAssets,
@@ -243,23 +261,6 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
 
   const canSave = Boolean(draftRule) && !isRuleSaving && validation.errors.length === 0
 
-  function formatDestinationShort(d: { destinationType: DestinationType; destinationAssets: RuleDestinationAsset[] }): string {
-    if (d.destinationType === 'SAME_AS_SOURCE') return 'Same as source'
-    if (d.destinationType === 'SINGLE_ASSET') return (d.destinationAssets[0]?.symbol ?? '—') || '—'
-    const assets = Array.isArray(d.destinationAssets) ? d.destinationAssets : []
-    if (assets.length === 0) return '—'
-    const parts = assets
-      .filter((a) => (a.symbol ?? '').trim())
-      .slice(0, 2)
-      .map((a) => {
-        const w = Number(a.weight ?? 0)
-        const pct = Number.isFinite(w) ? w : 0
-        return `${a.symbol}${pct > 0 ? ` (${pct})` : ''}`
-      })
-    const more = assets.filter((a) => (a.symbol ?? '').trim()).length > 2 ? ' +…' : ''
-    return parts.length ? `${parts.join(' / ')}${more}` : '—'
-  }
-
   return (
     <div className="stack">
       {reinvestmentSummaryError ? (
@@ -298,42 +299,6 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
               void saveRule(draftRule)
             }}
           >
-            {draftRule.scheduleMode === 'WEEK_OF_MONTH' ? (
-              <div className="weekPreviewRow" aria-label="Week destination preview">
-                {([1, 2, 3, 4] as const).map((w) => {
-                  const d = effectiveDestinationForWeek(draftRule, w)
-                  const label = formatDestinationShort(d)
-                  const active = w === editWeek
-                  return (
-                    <button
-                      key={w}
-                      type="button"
-                      className={active ? 'weekPreviewCard weekPreviewCardActive' : 'weekPreviewCard'}
-                      onClick={() => props.onActiveWeekChange?.(w)}
-                      disabled={isRuleSaving}
-                      aria-current={active ? 'true' : undefined}
-                      title={label}
-                    >
-                      <div className="weekPreviewWeek">Week {w}</div>
-                      <div className="weekPreviewValue">{label}</div>
-                    </button>
-                  )
-                })}
-              </div>
-            ) : null}
-
-            <label className="field checkboxField">
-              <span>Enabled</span>
-              <input
-                type="checkbox"
-                checked={draftRule.enabled}
-                onChange={(e) =>
-                  setDraftRule((prev) => (prev ? { ...prev, enabled: e.target.checked } : prev))
-                }
-                disabled={isRuleSaving}
-              />
-            </label>
-
             <label className="field">
               <span>Schedule mode</span>
               <select
@@ -352,9 +317,9 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                   })
                 }}
                 disabled={isRuleSaving}
-              >
+
+              > <option value="WEEK_OF_MONTH">Week 1–4 (different destinations)</option>
                 <option value="FIXED">Fixed schedule</option>
-                <option value="WEEK_OF_MONTH">Week 1–4 (different destinations)</option>
               </select>
             </label>
 
@@ -503,7 +468,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                           </thead>
                           <tbody>
                             {active.destinationAssets.map((a, idx) => (
-                              <tr key={`${idx}-${a.symbol}`}>
+                              <tr key={idx}>
                                 <td>
                                   <input
                                     value={a.symbol}
@@ -586,6 +551,16 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
             </label>
 
             <div className="actions">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!baselineRule) return
+                  setIsResetConfirmOpen(true)
+                }}
+                disabled={!baselineRule || isRuleSaving}
+              >
+                Reset
+              </button>
               <button type="submit" disabled={!canSave}>
                 Save
               </button>
@@ -601,6 +576,45 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
           </form>
         )}
       </section>
+
+      {isResetConfirmOpen ? (
+        <div
+          className="modalOverlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsResetConfirmOpen(false)
+          }}
+        >
+          <div className="modalDialog" role="dialog" aria-modal="true" aria-label="Confirm reset" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modalHeader">
+              <div className="modalTitle">Reset settings</div>
+            </div>
+            <div className="stack">
+              <p className="empty">Reset reinvestment settings to the last saved values?</p>
+              <div className="actionsRow" style={{ justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setIsResetConfirmOpen(false)} autoFocus>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!baselineRule) {
+                      setIsResetConfirmOpen(false)
+                      return
+                    }
+                    setDraftRule(cloneRule(baselineRule))
+                    props.onScheduleModeChange?.(baselineRule.scheduleMode)
+                    setIsResetConfirmOpen(false)
+                  }}
+                  disabled={!baselineRule}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="panel">
         <h2>Reinvestment history</h2>

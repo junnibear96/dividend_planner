@@ -4,6 +4,7 @@ import { useAuth } from '../auth'
 import ReinvestmentPanel from '../features/reinvestment/ReinvestmentPanel'
 import WeekTabs, { type WeekIndex } from '../features/reinvestment/WeekTabs'
 import type { ScheduleMode } from '../features/reinvestment/reinvestmentApi'
+import ReinvestmentTimelineLive from '../features/reinvestment/timeline/ReinvestmentTimelineLive'
 
 export default function ReinvestmentPage() {
   const { user, setUser } = useAuth()
@@ -58,6 +59,8 @@ export default function ReinvestmentPage() {
           onActiveWeekChange={setActiveWeek}
           onScheduleModeChange={setScheduleMode}
         />
+
+        <ReinvestmentTimelineLive />
       </div>
     </div>
   )

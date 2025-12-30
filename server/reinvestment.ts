@@ -252,30 +252,75 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
       if (Object.keys(out).length) weekDestinationsParsed = out as ReinvestmentRule['weekDestinations']
     }
 
+    let scheduleMode: ScheduleMode = (row.scheduleMode ?? 'FIXED') === 'WEEK_OF_MONTH' ? 'WEEK_OF_MONTH' : 'FIXED'
+    let weekDestinations: ReinvestmentRule['weekDestinations'] = weekDestinationsParsed
+
+    // Legacy default rules used FIXED schedule_mode. If the user hasn't customized anything,
+    // migrate them to WEEK_OF_MONTH so Week 1–4 is the default setup.
+    const looksLikeLegacyDefault =
+      !Boolean(row.enabled) &&
+      row.sourceScope === 'ALL' &&
+      row.destinationType === 'SAME_AS_SOURCE' &&
+      destinationAssets.length === 0 &&
+      row.frequency === 'weekly' &&
+      Number(row.minimumAmount) === 10 &&
+      Boolean(row.fractionalSharesAllowed) === true
+
+    if (scheduleMode === 'FIXED' && !weekDestinations && looksLikeLegacyDefault) {
+      const baseWeekDestination = {
+        destinationType: 'SAME_AS_SOURCE' as const,
+        destinationAssets: [] as Array<{ symbol: string; weight?: number }>,
+      }
+      weekDestinations = {
+        1: baseWeekDestination,
+        2: baseWeekDestination,
+        3: baseWeekDestination,
+        4: baseWeekDestination,
+      }
+      scheduleMode = 'WEEK_OF_MONTH'
+
+      await conn.execute(
+        `UPDATE reinvestment_rules
+         SET schedule_mode = 'WEEK_OF_MONTH',
+             week_destinations = :weekDestinations
+         WHERE id = :id`,
+        { id: row.id, weekDestinations: JSON.stringify(weekDestinations) },
+      )
+    }
+
     return {
       id: row.id,
       enabled: Boolean(row.enabled),
       sourceScope: row.sourceScope,
       destinationType: row.destinationType,
       destinationAssets,
-      scheduleMode: (row.scheduleMode ?? 'FIXED') === 'WEEK_OF_MONTH' ? 'WEEK_OF_MONTH' : 'FIXED',
+      scheduleMode,
       frequency: row.frequency,
-      weekDestinations: weekDestinationsParsed,
+      weekDestinations,
       minimumAmount: Number(row.minimumAmount),
       fractionalSharesAllowed: Boolean(row.fractionalSharesAllowed),
     }
   }
 
   const id = randomUUID()
+  const baseWeekDestination = {
+    destinationType: 'SAME_AS_SOURCE' as const,
+    destinationAssets: [] as Array<{ symbol: string; weight?: number }>,
+  }
   const defaultRule: ReinvestmentRule = {
     id,
     enabled: false,
     sourceScope: 'ALL',
     destinationType: 'SAME_AS_SOURCE',
     destinationAssets: [],
-    scheduleMode: 'FIXED',
+    scheduleMode: 'WEEK_OF_MONTH',
     frequency: 'weekly',
-    weekDestinations: undefined,
+    weekDestinations: {
+      1: baseWeekDestination,
+      2: baseWeekDestination,
+      3: baseWeekDestination,
+      4: baseWeekDestination,
+    },
     minimumAmount: 10,
     fractionalSharesAllowed: true,
   }
@@ -315,7 +360,7 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
       destinationAssets: JSON.stringify(defaultRule.destinationAssets),
       scheduleMode: defaultRule.scheduleMode,
       frequency: defaultRule.frequency,
-      weekDestinations: null,
+      weekDestinations: JSON.stringify(defaultRule.weekDestinations),
       minimumAmount: defaultRule.minimumAmount,
       fractionalSharesAllowed: 1,
     },
