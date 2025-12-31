@@ -1,15 +1,21 @@
-import 'dotenv/config'
+import dotenv from 'dotenv'
 import express from 'express'
 import mysql from 'mysql2/promise'
 import { randomUUID } from 'node:crypto'
 import cookieParser from 'cookie-parser'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   listReinvestmentExecutions,
   processPortfolioForReinvestment,
   updateReinvestmentRule,
 } from './reinvestment'
+
+// Always load the repo-root `.env` (even if the server is started from `server/`).
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.resolve(__dirname, '../.env') })
 
 type HoldingRow = {
   id: string
@@ -18,6 +24,21 @@ type HoldingRow = {
   dividendPerShare: number
   dividendFrequency: 'weekly' | 'monthly' | 'yearly'
   includeInReinvestment: boolean
+  createdAt: string
+}
+
+type PortfolioPositionRow = {
+  id: string
+  symbol: string
+  amount: number
+  buyPrice: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+type WatchlistItemRow = {
+  id: string
+  symbol: string
   createdAt: string
 }
 
@@ -106,6 +127,23 @@ async function fetchDividendsFromEodhd(symbol: string): Promise<unknown[]> {
   return Array.isArray(rows) ? (rows as unknown[]) : []
 }
 
+async function fetchFundamentalsFromEodhd(symbol: string): Promise<unknown> {
+  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
+  const url = `https://eodhd.com/api/fundamentals/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
+    eodhdToken,
+  )}&fmt=json`
+  return await eodhdFetchJson(url)
+}
+
+async function fetchExchangeSymbolsFromEodhd(exchange: string): Promise<unknown[]> {
+  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
+  const url = `https://eodhd.com/api/exchange-symbol-list/${encodeURIComponent(
+    exchange,
+  )}?api_token=${encodeURIComponent(eodhdToken)}&fmt=json`
+  const rows = await eodhdFetchJson(url)
+  return Array.isArray(rows) ? (rows as unknown[]) : []
+}
+
 async function ensureSchema() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS users (
@@ -133,6 +171,73 @@ async function ensureSchema() {
       INDEX idx_holdings_created_at (created_at)
     )`,
   )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS portfolio_positions (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      symbol VARCHAR(32) NOT NULL,
+      amount DECIMAL(18,6) NOT NULL,
+      buy_price DECIMAL(18,6) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_portfolio_user_symbol (user_id, symbol),
+      INDEX idx_portfolio_user_updated_at (user_id, updated_at)
+    )`,
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS watchlist_items (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      symbol VARCHAR(32) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uniq_watchlist_user_symbol (user_id, symbol),
+      INDEX idx_watchlist_user_created_at (user_id, created_at)
+    )`,
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS eodhd_exchange_symbols (
+      exchange VARCHAR(16) NOT NULL,
+      symbol VARCHAR(32) NOT NULL,
+      name VARCHAR(255) NULL,
+      type VARCHAR(24) NULL,
+      currency VARCHAR(16) NULL,
+      fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (exchange, symbol),
+      INDEX idx_eodhd_symbols_exchange_symbol (exchange, symbol),
+      INDEX idx_eodhd_symbols_exchange_name (exchange, name)
+    )`,
+  )
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS eodhd_fundamentals (
+      symbol VARCHAR(32) NOT NULL,
+      payload LONGTEXT NOT NULL,
+      fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (symbol),
+      INDEX idx_eodhd_fund_fetched_at (fetched_at)
+    )`,
+  )
+
+  // If upgrading from an older schema, add buy_price column if missing.
+  const [portfolioBuyPriceCol] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'portfolio_positions'
+       AND column_name = 'buy_price'`,
+  )
+  const hasBuyPrice = Number((portfolioBuyPriceCol[0] as { count: number }).count) > 0
+  if (!hasBuyPrice) {
+    await pool.execute(
+      `ALTER TABLE portfolio_positions
+       ADD COLUMN buy_price DECIMAL(18,6) NULL AFTER amount`,
+    )
+  }
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS dividend_accruals (
@@ -169,7 +274,7 @@ async function ensureSchema() {
       source_scope VARCHAR(16) NOT NULL,
       destination_type VARCHAR(32) NOT NULL,
       destination_assets JSON NOT NULL,
-      schedule_mode VARCHAR(24) NOT NULL DEFAULT 'FIXED',
+      schedule_mode VARCHAR(24) NOT NULL DEFAULT 'WEEK_OF_MONTH',
       frequency VARCHAR(16) NOT NULL,
       week_destinations JSON NULL,
       minimum_amount DECIMAL(18,6) NOT NULL,
@@ -274,7 +379,7 @@ async function ensureSchema() {
   const hasScheduleMode = Number((ruleScheduleCol[0] as { count: number }).count) > 0
   if (!hasScheduleMode) {
     await pool.execute(
-      `ALTER TABLE reinvestment_rules ADD COLUMN schedule_mode VARCHAR(24) NOT NULL DEFAULT 'FIXED' AFTER destination_assets`,
+      `ALTER TABLE reinvestment_rules ADD COLUMN schedule_mode VARCHAR(24) NOT NULL DEFAULT 'WEEK_OF_MONTH' AFTER destination_assets`,
     )
   }
 
@@ -378,6 +483,274 @@ async function ensureSchema() {
      SET dividend_frequency = 'yearly'
      WHERE dividend_frequency IS NULL OR dividend_frequency = ''`,
   )
+}
+
+function normalizeWatchlistSymbol(raw: unknown): string {
+  const s = toSymbol(raw)
+  if (!s) return ''
+  // Default to US exchange suffix if the user enters a bare ticker.
+  if (s.includes('.')) return s
+  return `${s}.US`
+}
+
+function toMs(raw: unknown): number | null {
+  if (!raw) return null
+  if (raw instanceof Date) return raw.getTime()
+  const ms = Date.parse(String(raw))
+  return Number.isFinite(ms) ? ms : null
+}
+
+async function loadStockRealtimeWithMeta(
+  symbol: string,
+): Promise<{ payload: unknown; fetchedAtMs: number | null } | null> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT payload, fetched_at AS fetchedAt FROM stock_realtime WHERE symbol = :symbol LIMIT 1`,
+    { symbol },
+  )
+  const row = rows[0] as { payload?: unknown; fetchedAt?: unknown } | undefined
+  if (!row?.payload) return null
+
+  let payload: unknown = row.payload
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload)
+    } catch {
+      payload = null
+    }
+  }
+  if (!payload) return null
+
+  return { payload, fetchedAtMs: toMs(row.fetchedAt) }
+}
+
+async function loadFundamentalsWithMeta(
+  symbol: string,
+): Promise<{ payload: unknown; fetchedAtMs: number | null } | null> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT payload, fetched_at AS fetchedAt FROM eodhd_fundamentals WHERE symbol = :symbol LIMIT 1`,
+    { symbol },
+  )
+  const row = rows[0] as { payload?: unknown; fetchedAt?: unknown } | undefined
+  if (!row?.payload) return null
+
+  let payload: unknown = row.payload
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload)
+    } catch {
+      payload = null
+    }
+  }
+  if (!payload) return null
+  return { payload, fetchedAtMs: toMs(row.fetchedAt) }
+}
+
+async function upsertFundamentals(symbol: string, payload: unknown): Promise<void> {
+  await pool.execute(
+    `INSERT INTO eodhd_fundamentals (symbol, payload, fetched_at)
+     VALUES (:symbol, :payload, CURRENT_TIMESTAMP)
+     ON DUPLICATE KEY UPDATE payload = VALUES(payload), fetched_at = VALUES(fetched_at)`,
+    { symbol, payload: JSON.stringify(payload) },
+  )
+}
+
+function extractFundamentalsMeta(payload: unknown): {
+  name: string | null
+  type: string | null
+  currency: string | null
+} {
+  const obj = (payload ?? {}) as Record<string, unknown>
+  const general = (obj.General ?? obj.general ?? null) as any
+  const name = typeof general?.Name === 'string' ? general.Name : typeof general?.name === 'string' ? general.name : null
+  const type = typeof general?.Type === 'string' ? general.Type : typeof general?.type === 'string' ? general.type : null
+  const currency =
+    typeof general?.CurrencyCode === 'string'
+      ? general.CurrencyCode
+      : typeof general?.Currency === 'string'
+        ? general.Currency
+        : typeof general?.currency === 'string'
+          ? general.currency
+          : null
+
+  return { name, type, currency }
+}
+
+function normalizeRealtimeQuote(rt: unknown): {
+  price: number | null
+  change: number | null
+  changePercent: number | null
+} {
+  const obj = (rt ?? {}) as Record<string, unknown>
+
+  const price =
+    typeof obj.close === 'number'
+      ? obj.close
+      : typeof obj.price === 'number'
+        ? obj.price
+        : typeof obj.last === 'number'
+          ? obj.last
+          : null
+
+  const previousClose =
+    typeof obj.previousClose === 'number'
+      ? obj.previousClose
+      : typeof obj.previous_close === 'number'
+        ? obj.previous_close
+        : null
+
+  let change = typeof obj.change === 'number' ? obj.change : null
+  let changePercent =
+    typeof obj.change_p === 'number'
+      ? obj.change_p
+      : typeof obj.changePercent === 'number'
+        ? obj.changePercent
+        : null
+
+  if (change === null && typeof price === 'number' && typeof previousClose === 'number') {
+    change = price - previousClose
+  }
+  if (changePercent === null && typeof change === 'number' && typeof previousClose === 'number') {
+    changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0
+  }
+
+  return { price, change, changePercent }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  const limit = Math.max(1, Math.floor(concurrency))
+  let i = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }).map(async () => {
+    while (i < items.length) {
+      const idx = i++
+      await fn(items[idx] as T, idx)
+    }
+  })
+  await Promise.all(workers)
+}
+
+async function ensureExchangeSymbolsCached(exchangeRaw: string, maxAgeMs: number): Promise<void> {
+  const exchange = String(exchangeRaw ?? '').trim().toUpperCase() || 'US'
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT MAX(fetched_at) AS lastFetched FROM eodhd_exchange_symbols WHERE exchange = :exchange`,
+    { exchange },
+  )
+  const lastFetched = toMs((rows[0] as any)?.lastFetched)
+  const now = Date.now()
+  if (lastFetched && now - lastFetched < maxAgeMs) return
+
+  const list = await fetchExchangeSymbolsFromEodhd(exchange)
+
+  await pool.execute(`DELETE FROM eodhd_exchange_symbols WHERE exchange = :exchange`, { exchange })
+
+  const parsed = list
+    .map((x) => (x ?? {}) as Record<string, unknown>)
+    .map((x) => {
+      const code =
+        typeof x.Code === 'string'
+          ? x.Code
+          : typeof x.code === 'string'
+            ? x.code
+            : typeof x.Symbol === 'string'
+              ? x.Symbol
+              : typeof x.symbol === 'string'
+                ? x.symbol
+                : ''
+      const symbol = toSymbol(code)
+      const name = typeof x.Name === 'string' ? x.Name : typeof x.name === 'string' ? x.name : null
+      const type = typeof x.Type === 'string' ? x.Type : typeof x.type === 'string' ? x.type : null
+      const currency =
+        typeof x.Currency === 'string'
+          ? x.Currency
+          : typeof x.currency === 'string'
+            ? x.currency
+            : null
+      return { symbol, name, type, currency }
+    })
+    .filter((r) => Boolean(r.symbol))
+
+  const chunkSize = 500
+  for (let start = 0; start < parsed.length; start += chunkSize) {
+    const chunk = parsed.slice(start, start + chunkSize)
+    const placeholders = chunk.map(() => '(?,?,?,?,?,CURRENT_TIMESTAMP)').join(',')
+    const params: unknown[] = []
+    for (const r of chunk) {
+      params.push(exchange, r.symbol, r.name, r.type, r.currency)
+    }
+    await pool.execute(
+      `INSERT INTO eodhd_exchange_symbols (exchange, symbol, name, type, currency, fetched_at)
+       VALUES ${placeholders}
+       ON DUPLICATE KEY UPDATE
+         name = VALUES(name),
+         type = VALUES(type),
+         currency = VALUES(currency),
+         fetched_at = VALUES(fetched_at)`,
+      params,
+    )
+  }
+}
+
+async function getRealtimeFetchedAtMs(symbols: string[]): Promise<Record<string, number>> {
+  const unique = Array.from(new Set(symbols.map((s) => toSymbol(s)).filter(Boolean)))
+  if (unique.length === 0) return {}
+
+  const params: Record<string, unknown> = {}
+  const names: string[] = []
+  unique.forEach((s, idx) => {
+    const key = `s${idx}`
+    params[key] = s
+    names.push(`:${key}`)
+  })
+
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT symbol, fetched_at AS fetchedAt
+     FROM stock_realtime
+     WHERE symbol IN (${names.join(', ')})`,
+    params,
+  )
+
+  const out: Record<string, number> = {}
+  for (const r of rows as unknown as Array<{ symbol?: unknown; fetchedAt?: unknown }>) {
+    const symbol = toSymbol(r.symbol)
+    const ms = toMs(r.fetchedAt)
+    if (symbol && ms) out[symbol] = ms
+  }
+  return out
+}
+
+async function getFundamentalsFetchedAtMs(symbols: string[]): Promise<Record<string, number>> {
+  const unique = Array.from(new Set(symbols.map((s) => toSymbol(s)).filter(Boolean)))
+  if (unique.length === 0) return {}
+
+  const params: Record<string, unknown> = {}
+  const names: string[] = []
+  unique.forEach((s, idx) => {
+    const key = `f${idx}`
+    params[key] = s
+    names.push(`:${key}`)
+  })
+
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT symbol, fetched_at AS fetchedAt
+     FROM eodhd_fundamentals
+     WHERE symbol IN (${names.join(', ')})`,
+    params,
+  )
+
+  const out: Record<string, number> = {}
+  for (const r of rows as unknown as Array<{ symbol?: unknown; fetchedAt?: unknown }>) {
+    const symbol = toSymbol(r.symbol)
+    const ms = toMs(r.fetchedAt)
+    if (symbol && ms) out[symbol] = ms
+  }
+  return out
 }
 
 async function loadStockRealtime(symbol: string): Promise<unknown | null> {
@@ -575,6 +948,8 @@ app.get('/api/stocks/symbols', async (req, res) => {
         SELECT symbol FROM stock_dividends
         UNION
         SELECT symbol FROM holdings
+        UNION
+        SELECT symbol FROM portfolio_positions
       ) AS s
       WHERE symbol LIKE :like
       ORDER BY symbol
@@ -787,6 +1162,204 @@ app.get('/api/holdings', async (_req, res) => {
     })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'DB error' })
+  }
+})
+
+app.get('/api/portfolio', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT
+        id,
+        symbol,
+        amount,
+        buy_price AS buyPrice,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM portfolio_positions
+      WHERE user_id = :userId
+      ORDER BY updated_at DESC, created_at DESC`,
+      { userId: user.id },
+    )
+
+    res.json({
+      positions: (rows as unknown as PortfolioPositionRow[]).map((r) => ({
+        ...r,
+        symbol: toSymbol(r.symbol),
+      })),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.post('/api/portfolio', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const symbol = toSymbol(req.body?.symbol)
+    const amount = Number(req.body?.amount)
+    const buyPriceRaw = req.body?.buyPrice
+    const buyPrice = buyPriceRaw === undefined || buyPriceRaw === null || buyPriceRaw === ''
+      ? null
+      : Number(buyPriceRaw)
+
+    if (!symbol) {
+      res.status(400).json({ error: 'Symbol is required' })
+      return
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ error: 'Amount must be a positive number' })
+      return
+    }
+
+    if (buyPrice !== null && (!Number.isFinite(buyPrice) || buyPrice <= 0)) {
+      res.status(400).json({ error: 'Buy price must be a positive number' })
+      return
+    }
+
+    const id = randomUUID()
+
+    try {
+      await pool.execute(
+        `INSERT INTO portfolio_positions (
+          id,
+          user_id,
+          symbol,
+          amount,
+          buy_price
+        ) VALUES (
+          :id,
+          :userId,
+          :symbol,
+          :amount,
+          :buyPrice
+        )`,
+        { id, userId: user.id, symbol, amount, buyPrice },
+      )
+    } catch (err) {
+      // If the user already has this symbol, return a friendly error.
+      if (err && typeof err === 'object' && 'code' in err && (err as any).code === 'ER_DUP_ENTRY') {
+        res.status(409).json({ error: 'Symbol already exists in your portfolio' })
+        return
+      }
+      throw err
+    }
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT
+        id,
+        symbol,
+        amount,
+        buy_price AS buyPrice,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM portfolio_positions
+      WHERE id = :id AND user_id = :userId`,
+      { id, userId: user.id },
+    )
+
+    const position = rows[0] as unknown as PortfolioPositionRow | undefined
+    res.status(201).json({
+      position: position ? { ...position, symbol: toSymbol(position.symbol) } : undefined,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.patch('/api/portfolio/:id', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const id = String(req.params.id ?? '').trim()
+    if (!id) {
+      res.status(400).json({ error: 'Missing id' })
+      return
+    }
+
+    const patchAmount = req.body?.amount
+    const patchBuyPrice = req.body?.buyPrice
+
+    const updates: string[] = []
+    const params: Record<string, unknown> = { id, userId: user.id }
+
+    if (patchAmount !== undefined) {
+      const amount = Number(patchAmount)
+      if (!Number.isFinite(amount) || amount <= 0) {
+        res.status(400).json({ error: 'Amount must be a positive number' })
+        return
+      }
+      updates.push('amount = :amount')
+      params.amount = amount
+    }
+
+    if (patchBuyPrice !== undefined) {
+      if (patchBuyPrice === null || patchBuyPrice === '') {
+        updates.push('buy_price = NULL')
+      } else {
+        const buyPrice = Number(patchBuyPrice)
+        if (!Number.isFinite(buyPrice) || buyPrice <= 0) {
+          res.status(400).json({ error: 'Buy price must be a positive number' })
+          return
+        }
+        updates.push('buy_price = :buyPrice')
+        params.buyPrice = buyPrice
+      }
+    }
+
+    if (updates.length === 0) {
+      res.status(400).json({ error: 'No fields to update' })
+      return
+    }
+
+    const [result] = await pool.execute<mysql.ResultSetHeader>(
+      `UPDATE portfolio_positions
+       SET ${updates.join(', ')}
+       WHERE id = :id AND user_id = :userId`,
+      params,
+    )
+
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: 'Position not found' })
+      return
+    }
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT
+        id,
+        symbol,
+        amount,
+        buy_price AS buyPrice,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM portfolio_positions
+      WHERE id = :id AND user_id = :userId`,
+      { id, userId: user.id },
+    )
+
+    const position = rows[0] as unknown as PortfolioPositionRow | undefined
+    res.json({
+      position: position ? { ...position, symbol: toSymbol(position.symbol) } : undefined,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
 })
 
@@ -1023,7 +1596,7 @@ app.put('/api/reinvestment/rule', async (req, res) => {
       destinationAssets: Array.isArray(req.body?.destinationAssets)
         ? (req.body.destinationAssets as any)
         : [],
-      scheduleMode: String(req.body?.scheduleMode ?? 'FIXED') as any,
+      scheduleMode: String(req.body?.scheduleMode ?? 'WEEK_OF_MONTH') as any,
       frequency: String(req.body?.frequency ?? 'weekly') as any,
       weekDestinations:
         req.body?.weekDestinations && typeof req.body.weekDestinations === 'object'
@@ -1088,6 +1661,240 @@ app.delete('/api/holdings/:id', async (req, res) => {
     res.status(204).end()
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'DB error' })
+  }
+})
+
+app.get('/api/watchlist', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT
+        w.id,
+        w.symbol,
+        w.created_at AS createdAt,
+        f.payload AS fundamentalsPayload,
+        rt.payload AS realtimePayload
+      FROM watchlist_items w
+      LEFT JOIN eodhd_fundamentals f ON f.symbol = w.symbol
+      LEFT JOIN stock_realtime rt ON rt.symbol = w.symbol
+      WHERE w.user_id = :userId
+      ORDER BY w.created_at DESC`,
+      { userId: user.id },
+    )
+
+    const items = (rows as unknown as Array<
+      WatchlistItemRow & { fundamentalsPayload?: unknown; realtimePayload?: unknown }
+    >).map((r) => {
+      const symbol = toSymbol(r.symbol)
+
+      let fundamentals: unknown = r.fundamentalsPayload
+      if (typeof fundamentals === 'string') {
+        try {
+          fundamentals = JSON.parse(fundamentals)
+        } catch {
+          fundamentals = null
+        }
+      }
+      const meta = extractFundamentalsMeta(fundamentals)
+
+      let realtime: unknown = r.realtimePayload
+      if (typeof realtime === 'string') {
+        try {
+          realtime = JSON.parse(realtime)
+        } catch {
+          realtime = null
+        }
+      }
+      const q = normalizeRealtimeQuote(realtime)
+
+      return {
+        id: r.id,
+        symbol,
+        createdAt: r.createdAt,
+        name: meta.name,
+        type: meta.type,
+        currency: meta.currency,
+        price: q.price,
+        change: q.change,
+        changePercent: q.changePercent,
+      }
+    })
+
+    res.json({ items })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.post('/api/watchlist', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const symbol = normalizeWatchlistSymbol(req.body?.symbol)
+    if (!symbol) {
+      res.status(400).json({ error: 'Symbol is required' })
+      return
+    }
+
+    const id = randomUUID()
+    try {
+      await pool.execute(
+        `INSERT INTO watchlist_items (id, user_id, symbol)
+         VALUES (:id, :userId, :symbol)`,
+        { id, userId: user.id, symbol },
+      )
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && (err as any).code === 'ER_DUP_ENTRY') {
+        res.status(409).json({ error: 'Symbol already exists in your watchlist' })
+        return
+      }
+      throw err
+    }
+
+    // Warm fundamentals cache (best-effort).
+    try {
+      const fund = await fetchFundamentalsFromEodhd(symbol)
+      await upsertFundamentals(symbol, fund)
+    } catch {
+      // ignore
+    }
+
+    res.status(201).json({ id, symbol })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.delete('/api/watchlist/:symbol', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const symbol = normalizeWatchlistSymbol(req.params.symbol)
+    if (!symbol) {
+      res.status(400).json({ error: 'Missing symbol' })
+      return
+    }
+
+    const [result] = await pool.execute<mysql.ResultSetHeader>(
+      `DELETE FROM watchlist_items WHERE user_id = :userId AND symbol = :symbol`,
+      { userId: user.id, symbol },
+    )
+
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: 'Watchlist item not found' })
+      return
+    }
+
+    res.status(204).end()
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.get('/api/watchlist/search', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const q = toSymbol(req.query.q)
+    if (!q) {
+      res.json({ symbols: [] })
+      return
+    }
+
+    const exchange = String(req.query.exchange ?? 'US').trim().toUpperCase() || 'US'
+    const limit = Math.max(1, Math.min(50, Math.floor(Number(req.query.limit ?? '10'))))
+
+    // Cache symbol list ~7 days.
+    await ensureExchangeSymbolsCached(exchange, 7 * 24 * 60 * 60 * 1000)
+
+    const like = `${q}%`
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT symbol
+       FROM eodhd_exchange_symbols
+       WHERE exchange = :exchange AND symbol LIKE :like
+       ORDER BY symbol
+       LIMIT ${limit}`,
+      { exchange, like },
+    )
+
+    const symbols = (rows as unknown as Array<{ symbol?: unknown }>).map((r) => toSymbol(r.symbol)).filter(Boolean)
+    res.json({ symbols })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.post('/api/watchlist/refresh', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT symbol FROM watchlist_items WHERE user_id = :userId ORDER BY created_at DESC`,
+      { userId: user.id },
+    )
+    const symbols = (rows as unknown as Array<{ symbol?: unknown }>).map((r) => toSymbol(r.symbol)).filter(Boolean)
+
+    const now = Date.now()
+    const realtimeFetched = await getRealtimeFetchedAtMs(symbols)
+    const maxAgeMs = 60 * 1000
+    const staleQuotes = symbols.filter((s) => {
+      const ms = realtimeFetched[s]
+      return !ms || now - ms > maxAgeMs
+    })
+
+    await mapWithConcurrency(staleQuotes, 2, async (s, idx) => {
+      // Gentle pacing to avoid bursts.
+      if (idx > 0) await sleep(250)
+      const rt = await fetchRealTimeFromEodhd(s)
+      await upsertStockRealtime(s, rt)
+    })
+
+    // Fundamentals: keep ~30 days.
+    const fundFetched = await getFundamentalsFetchedAtMs(symbols)
+    const fundMaxAgeMs = 30 * 24 * 60 * 60 * 1000
+    const staleFund = symbols.filter((s) => {
+      const ms = fundFetched[s]
+      return !ms || now - ms > fundMaxAgeMs
+    })
+    await mapWithConcurrency(staleFund, 1, async (s, idx) => {
+      if (idx > 0) await sleep(300)
+      const f = await fetchFundamentalsFromEodhd(s)
+      await upsertFundamentals(s, f)
+    })
+
+    res.json({
+      symbols: symbols.length,
+      refreshedQuotes: staleQuotes.length,
+      refreshedFundamentals: staleFund.length,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
 })
 

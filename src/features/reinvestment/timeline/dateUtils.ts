@@ -16,6 +16,18 @@ export function toUtcDateOnly(d: Date): Date {
   return makeUtcDate(d.getUTCFullYear(), (d.getUTCMonth() + 1) as MonthNumber, d.getUTCDate())
 }
 
+export function addDaysUtc(d: Date, days: number): Date {
+  // Adds days in UTC, preserving deterministic midnight semantics.
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days, 0, 0, 0, 0))
+}
+
+export function startOfWeekUtc(d: Date, weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6): Date {
+  const dd = toUtcDateOnly(d)
+  const dow = dd.getUTCDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6
+  const offset = (dow - weekStartsOn + 7) % 7
+  return addDaysUtc(dd, -offset)
+}
+
 export function daysInMonthUtc(year: number, month: MonthNumber): number {
   // Day 0 of next month is last day of requested month.
   return new Date(Date.UTC(year, month, 0)).getUTCDate()

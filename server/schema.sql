@@ -24,6 +24,57 @@ CREATE TABLE IF NOT EXISTS holdings (
   INDEX idx_holdings_created_at (created_at)
 );
 
+-- Simple portfolio positions used by the logged-in Home dashboard
+
+CREATE TABLE IF NOT EXISTS portfolio_positions (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  symbol VARCHAR(32) NOT NULL,
+  amount DECIMAL(18,6) NOT NULL,
+  buy_price DECIMAL(18,6) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_portfolio_user_symbol (user_id, symbol),
+  INDEX idx_portfolio_user_updated_at (user_id, updated_at)
+);
+
+-- Watchlist (관심 목록)
+
+CREATE TABLE IF NOT EXISTS watchlist_items (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  symbol VARCHAR(32) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_watchlist_user_symbol (user_id, symbol),
+  INDEX idx_watchlist_user_created_at (user_id, created_at)
+);
+
+-- Cached EODHD exchange symbol lists (search / metadata)
+
+CREATE TABLE IF NOT EXISTS eodhd_exchange_symbols (
+  exchange VARCHAR(16) NOT NULL,
+  symbol VARCHAR(32) NOT NULL,
+  name VARCHAR(255) NULL,
+  type VARCHAR(24) NULL,
+  currency VARCHAR(16) NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (exchange, symbol),
+  INDEX idx_eodhd_symbols_exchange_symbol (exchange, symbol),
+  INDEX idx_eodhd_symbols_exchange_name (exchange, name)
+);
+
+-- Cached EODHD fundamentals (name/type/currency)
+
+CREATE TABLE IF NOT EXISTS eodhd_fundamentals (
+  symbol VARCHAR(32) NOT NULL,
+  payload LONGTEXT NOT NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (symbol),
+  INDEX idx_eodhd_fund_fetched_at (fetched_at)
+);
+
 -- Reinvestment system (dividends accrue into a cash pool and are reinvested on a schedule)
 
 CREATE TABLE IF NOT EXISTS dividend_accruals (
@@ -56,7 +107,7 @@ CREATE TABLE IF NOT EXISTS reinvestment_rules (
   source_scope VARCHAR(16) NOT NULL,
   destination_type VARCHAR(32) NOT NULL,
   destination_assets JSON NOT NULL,
-  schedule_mode VARCHAR(24) NOT NULL DEFAULT 'FIXED',
+  schedule_mode VARCHAR(24) NOT NULL DEFAULT 'WEEK_OF_MONTH',
   frequency VARCHAR(16) NOT NULL,
   week_destinations JSON NULL,
   minimum_amount DECIMAL(18,6) NOT NULL,
@@ -99,6 +150,7 @@ CREATE TABLE IF NOT EXISTS stock_eod (
   high DECIMAL(18,6) NOT NULL,
   low DECIMAL(18,6) NOT NULL,
   close DECIMAL(18,6) NOT NULL,
+  adjusted_close DECIMAL(18,6) NULL,
   volume BIGINT NULL,
   fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (symbol, date),

@@ -11,7 +11,7 @@ export default function ReinvestmentPage() {
   const navigate = useNavigate()
 
   const [activeWeek, setActiveWeek] = useState<WeekIndex>(1)
-  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('FIXED')
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('WEEK_OF_MONTH')
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -54,13 +54,13 @@ export default function ReinvestmentPage() {
           </div>
         ) : null}
 
+        <ReinvestmentTimelineLive focusWeekIndex={scheduleMode === 'WEEK_OF_MONTH' ? activeWeek : undefined} />
+
         <ReinvestmentPanel
           activeWeek={activeWeek}
           onActiveWeekChange={setActiveWeek}
           onScheduleModeChange={setScheduleMode}
         />
-
-        <ReinvestmentTimelineLive />
       </div>
     </div>
   )

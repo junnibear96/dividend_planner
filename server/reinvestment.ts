@@ -252,7 +252,7 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
       if (Object.keys(out).length) weekDestinationsParsed = out as ReinvestmentRule['weekDestinations']
     }
 
-    let scheduleMode: ScheduleMode = (row.scheduleMode ?? 'FIXED') === 'WEEK_OF_MONTH' ? 'WEEK_OF_MONTH' : 'FIXED'
+    let scheduleMode: ScheduleMode = (row.scheduleMode ?? 'WEEK_OF_MONTH') === 'WEEK_OF_MONTH' ? 'WEEK_OF_MONTH' : 'FIXED'
     let weekDestinations: ReinvestmentRule['weekDestinations'] = weekDestinationsParsed
 
     // Legacy default rules used FIXED schedule_mode. If the user hasn't customized anything,

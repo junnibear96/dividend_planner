@@ -1,4 +1,14 @@
-import { addMonths, compareDateOnlyUtc, daysInMonthUtc, isDateInRangeUtc, makeUtcDate, type MonthNumber, toUtcDateOnly } from './dateUtils'
+import {
+  addDaysUtc,
+  addMonths,
+  compareDateOnlyUtc,
+  daysInMonthUtc,
+  isDateInRangeUtc,
+  makeUtcDate,
+  startOfWeekUtc,
+  type MonthNumber,
+  toUtcDateOnly,
+} from './dateUtils'
 import type {
   GenerateWeeklyReinvestmentTimeline,
   Holdings,
@@ -28,33 +38,38 @@ function emptyShares(): TimelineShares {
 
 export function deriveWeeksForMonthUtc(year: number, month: MonthNumber): Array<{ weekIndex: number; startDate: Date; endDate: Date }> {
   const lastDay = daysInMonthUtc(year, month)
-  const weeks: Array<{ weekIndex: number; startDate: Date; endDate: Date }> = []
+  const monthStart = makeUtcDate(year, month, 1)
+  const monthEnd = makeUtcDate(year, month, lastDay)
 
-  const boundaries: Array<{ weekIndex: number; startDay: number; endDay: number }> = [
-    { weekIndex: 1, startDay: 1, endDay: 7 },
-    { weekIndex: 2, startDay: 8, endDay: 14 },
-    { weekIndex: 3, startDay: 15, endDay: 21 },
-    { weekIndex: 4, startDay: 22, endDay: 28 },
-  ]
+  // Use Sunday-start weeks (calendar default in many locales).
+  const weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6 = 0
 
-  for (const b of boundaries) {
-    if (b.startDay > lastDay) break
-    weeks.push({
-      weekIndex: b.weekIndex,
-      startDate: makeUtcDate(year, month, b.startDay),
-      endDate: makeUtcDate(year, month, Math.min(b.endDay, lastDay)),
-    })
+  const slices: Array<{ weekIndex: number; startDate: Date; endDate: Date }> = []
+  let cursor = startOfWeekUtc(monthStart, weekStartsOn)
+  let weekIndex = 1
+
+  while (compareDateOnlyUtc(cursor, monthEnd) <= 0) {
+    const weekStart = cursor
+    const weekEnd = addDaysUtc(cursor, 6)
+
+    const startDate = compareDateOnlyUtc(weekStart, monthStart) < 0 ? monthStart : weekStart
+    const endDate = compareDateOnlyUtc(weekEnd, monthEnd) > 0 ? monthEnd : weekEnd
+
+    if (compareDateOnlyUtc(startDate, endDate) <= 0) {
+      slices.push({ weekIndex, startDate, endDate })
+      weekIndex += 1
+    }
+
+    cursor = addDaysUtc(cursor, 7)
   }
 
-  if (lastDay > 28) {
-    weeks.push({
-      weekIndex: 5,
-      startDate: makeUtcDate(year, month, 29),
-      endDate: makeUtcDate(year, month, lastDay),
-    })
-  }
+  // Cap to at most 5 visible weeks by merging any overflow into Week 5.
+  if (slices.length <= 5) return slices
 
-  return weeks
+  const firstFour = slices.slice(0, 4)
+  const mergedWeek5Start = slices[4].startDate
+  const mergedWeek5End = slices[slices.length - 1].endDate
+  return [...firstFour, { weekIndex: 5, startDate: mergedWeek5Start, endDate: mergedWeek5End }]
 }
 
 function weekStatusUtc(now: Date, startDate: Date, endDate: Date): WeekStatus {

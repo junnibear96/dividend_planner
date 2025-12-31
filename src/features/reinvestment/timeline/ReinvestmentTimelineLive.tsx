@@ -4,6 +4,7 @@ import { fetchReinvestmentHistory, fetchReinvestmentSummary, type ReinvestmentEx
 import ReinvestmentTimeline from './ReinvestmentTimeline'
 import { makeUtcDate, type MonthNumber } from './dateUtils'
 import type { GenerateWeeklyReinvestmentTimeline, Holdings, ReinvestmentExecutionWeek, TimelineShares } from './types'
+import type { WeekIndex } from '../WeekTabs'
 
 async function jsonOrNull(res: Response) {
   try {
@@ -138,7 +139,8 @@ function weeklyEquivalentDividendPerShare(h: PlannerHolding): number {
   return dps / 52
 }
 
-export default function ReinvestmentTimelineLive() {
+export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekIndex } = {}) {
+  const { focusWeekIndex } = props
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -328,7 +330,7 @@ export default function ReinvestmentTimelineLive() {
   if (isLoading) {
     return (
       <section className="panel" aria-label="Dividend reinvestment timeline">
-        <h2>Dividend Reinvestment Timeline</h2>
+        <h2>Summary</h2>
         <p className="empty">Loading…</p>
       </section>
     )
@@ -337,7 +339,7 @@ export default function ReinvestmentTimelineLive() {
   if (error || !rule) {
     return (
       <section className="panel" aria-label="Dividend reinvestment timeline">
-        <h2>Dividend Reinvestment Timeline</h2>
+        <h2>Summary</h2>
         <p className="error" role="alert" aria-live="polite">
           {error ?? 'Missing reinvestment rule'}
         </p>
@@ -355,6 +357,7 @@ export default function ReinvestmentTimelineLive() {
       reinvestmentRules={rule}
       reinvestmentExecutions={executionWeeks}
       generateWeeklyReinvestmentTimeline={generator}
+      focusWeekIndex={focusWeekIndex}
     />
   )
 }

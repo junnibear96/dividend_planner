@@ -3,6 +3,7 @@ import MonthYearHeader, { type MonthYear } from './MonthYearHeader'
 import { monthLabel, type MonthNumber } from './dateUtils'
 import { buildMonthlyTimeline } from './buildMonthlyTimeline'
 import type { GenerateWeeklyReinvestmentTimeline, Holdings, ReinvestmentExecutionWeek, TimelineShares, WeeklySlice } from './types'
+import type { WeekIndex } from '../WeekTabs'
 
 function formatMoney(value: number): string {
   return value.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
@@ -46,6 +47,9 @@ export default function ReinvestmentTimeline(props: {
   reinvestmentExecutions: ReinvestmentExecutionWeek[]
   generateWeeklyReinvestmentTimeline?: GenerateWeeklyReinvestmentTimeline
 
+  // If provided, show only this week in the UI.
+  focusWeekIndex?: WeekIndex
+
   now?: Date
 }) {
   const {
@@ -56,6 +60,7 @@ export default function ReinvestmentTimeline(props: {
     now,
     compoundingStartMonth,
     compoundingStartYear,
+    focusWeekIndex,
   } = props
 
   const [selected, setSelected] = useState<MonthYear>({ month: props.initialMonth, year: props.initialYear })
@@ -86,9 +91,15 @@ export default function ReinvestmentTimeline(props: {
     now,
   ])
 
+  const visibleWeeks = useMemo(() => {
+    return focusWeekIndex ? weeks.filter((w) => w.weekIndex === focusWeekIndex) : weeks
+  }, [focusWeekIndex, weeks])
+
+  const weeksGridClassName = visibleWeeks.length <= 1 ? 'timelineWeeks timelineWeeksSingle' : 'timelineWeeks'
+
   return (
     <section className="panel" aria-label="Dividend reinvestment timeline">
-      <h2>Dividend Reinvestment Timeline</h2>
+      <h2>Summary</h2>
       <p className="subtitle">
         {monthLabel(selected.month)} {selected.year} — weekly slices with compounding across months.
       </p>
@@ -112,8 +123,8 @@ export default function ReinvestmentTimeline(props: {
         }}
       />
 
-      <div className="timelineWeeks" aria-label="Weeks">
-        {weeks.map((w) => {
+      <div className={weeksGridClassName} aria-label="Weeks">
+        {visibleWeeks.map((w) => {
           const cardClass =
             w.status === 'CURRENT'
               ? 'timelineWeekCard timelineWeekCardCurrent'

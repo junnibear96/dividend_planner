@@ -22,7 +22,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isAuthLoading && user) {
-      navigate('/planner', { replace: true })
+      navigate('/home', { replace: true })
     }
   }, [isAuthLoading, user, navigate])
 
@@ -113,7 +113,7 @@ export default function LoginPage() {
                   user={user}
                   onUserChange={(next) => {
                     setUser(next)
-                    if (next) navigate('/planner', { replace: true })
+                    if (next) navigate('/home', { replace: true })
                   }}
                 />
               </div>
@@ -147,7 +147,7 @@ export default function LoginPage() {
                   setUser(next)
                   if (next) {
                     setIsAuthModalOpen(false)
-                    navigate('/planner', { replace: true })
+                    navigate('/home', { replace: true })
                   }
                 }}
               />

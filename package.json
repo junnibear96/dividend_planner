@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5175 --strictPort",
+    "dev": "vite --port 5176 --strictPort",
     "dev:server": "tsx watch server/index.ts",
     "dev:all": "concurrently -n server,web -c cyan,green \"npm run dev:server\" \"npm run dev\"",
     "db:check": "tsx server/check-db.ts",

@@ -3,6 +3,137 @@
   text-align: left;
 }
 
+.appShell {
+  min-height: 100vh;
+}
+
+.topNav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 78%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.topNavInner {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+}
+
+.homeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.homeButton:hover {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--border));
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface));
+}
+
+.navTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.navTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: color-mix(in oklab, var(--surface) 65%, transparent);
+  color: var(--text);
+  font-weight: 650;
+  text-decoration: none;
+  opacity: 0.95;
+}
+
+.navTab:hover {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+}
+
+.navTabActive {
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--border));
+  background: color-mix(in oklab, var(--accent) 18%, var(--surface));
+}
+
+.portfolioHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.portfolioHeaderRight {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-left: auto;
+  flex: 1 1 32rem;
+}
+
+.portfolioSearch {
+  flex: 1 1 22rem;
+  max-width: 40rem;
+  min-width: 16rem;
+}
+
+.tableInput {
+  width: 7.5rem;
+  text-align: right;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+}
+
+.tableButton {
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 720px) {
+  .portfolioHeaderRight {
+    width: 100%;
+    justify-content: stretch;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .portfolioHeaderRight .summaryCard {
+    width: 100%;
+  }
+
+  .portfolioSearch {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .tableInput {
+    width: 6.75rem;
+  }
+}
+
 .page {
   min-height: 100vh;
   display: flex;
@@ -16,6 +147,7 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
 .loginGrid {
@@ -163,6 +295,30 @@
   gap: 0.5rem;
 }
 
+@media (max-width: 420px) {
+  .timelineHeaderTitle {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .timelineHeaderSpacer {
+    display: none;
+  }
+
+  .timelineNavButton {
+    padding: 0.5rem 0.65rem;
+  }
+
+  .timelinePickButton {
+    padding: 0.5rem 0.65rem;
+    max-width: 100%;
+  }
+
+  .timelinePickerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .timelinePickerCell {
   padding: 0.55rem 0.6rem;
   border-radius: 12px;
@@ -177,13 +333,22 @@
 .timelineWeeks {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: stretch;
   gap: 0.75rem;
   margin-top: 0.9rem;
+}
+
+.timelineWeeksSingle {
+  grid-template-columns: 1fr;
 }
 
 @media (min-width: 980px) {
   .timelineWeeks {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .timelineWeeksSingle {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -478,7 +643,7 @@
 
 .header h1 {
   margin: 0;
-  font-size: 1.9rem;
+  font-size: clamp(1.5rem, 5vw, 1.9rem);
   letter-spacing: -0.02em;
 }
 
@@ -487,6 +652,10 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  border-radius: 18px;
+  padding: 1rem 1.1rem;
 }
 
 @media (max-width: 980px) {
@@ -508,9 +677,26 @@
   gap: 0.6rem;
 }
 
+.stockHeaderSearch {
+  width: 100%;
+}
+
+.stockLandingGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 980px) {
+  .stockLandingGrid {
+    grid-template-columns: 1.35fr 0.9fr;
+  }
+}
+
 .stockTitle {
   margin: 0;
-  font-size: 1.9rem;
+  font-size: clamp(1.5rem, 5vw, 1.9rem);
   letter-spacing: -0.02em;
 }
 
@@ -527,7 +713,7 @@
 
 .stockMeta {
   margin-top: 0.25rem;
-  opacity: 0.8;
+  opacity: 0.82;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -538,10 +724,10 @@
 }
 
 .priceBox {
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid color-mix(in oklab, var(--accent) 26%, var(--border));
+  background: color-mix(in oklab, var(--accent) 10%, var(--surface));
   border-radius: 16px;
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1.05rem;
   display: grid;
   gap: 0.25rem;
   min-width: 14rem;
@@ -549,9 +735,10 @@
 }
 
 .priceValue {
-  font-size: 1.45rem;
+  font-size: clamp(1.15rem, 4.2vw, 1.45rem);
   font-weight: 800;
   letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .priceChange {
@@ -561,19 +748,23 @@
 
 .chartWrap {
   width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.6rem 0.6rem 0.25rem;
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
 }
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 0.75rem;
 }
 
 .stat {
   border: 1px solid var(--border);
-  background: color-mix(in oklab, var(--surface) 85%, transparent);
-  border-radius: 12px;
-  padding: 0.75rem 0.85rem;
+  background: color-mix(in oklab, var(--surface) 82%, transparent);
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
 }
 
 .statLabel {
@@ -584,6 +775,7 @@
 .statValue {
   margin-top: 0.25rem;
   font-weight: 700;
+  letter-spacing: -0.005em;
 }
 
 .divSummary {
@@ -593,9 +785,17 @@
   margin-bottom: 0.75rem;
 }
 
+.divSummary > div {
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 82%, transparent);
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+}
+
 .divValue {
   margin-top: 0.25rem;
   font-weight: 800;
+  letter-spacing: -0.005em;
 }
 
 .subtitle {
@@ -919,6 +1119,14 @@
   background: color-mix(in oklab, var(--surface) 65%, transparent);
 }
 
+.profitPos {
+  color: color-mix(in oklab, var(--accent) 78%, var(--text));
+}
+
+.profitNeg {
+  color: var(--danger);
+}
+
 .num {
   text-align: right;
 }
@@ -950,6 +1158,10 @@
     padding: 1.25rem;
   }
 
+  .topNavInner {
+    padding: 0.65rem 1.25rem;
+  }
+
   .panel {
     padding: 0.85rem;
   }
@@ -963,11 +1175,13 @@
   .header {
     align-items: stretch;
     flex-direction: column;
+    justify-content: flex-start;
   }
 
   .headerRight {
     align-items: stretch;
     flex-direction: column;
+    justify-content: flex-start;
   }
 
   .stockSearch {
@@ -980,6 +1194,7 @@
 
   .userBox {
     min-width: 0;
+    flex: 0 0 auto;
   }
 
   .summary {
@@ -1007,5 +1222,56 @@
 
   .divSummary {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Extra-small phones: prevent header/user box from stretching awkwardly */
+@media (max-width: 520px) {
+  .page {
+    padding: 1rem;
+  }
+
+  .panel {
+    padding: 0.85rem;
+  }
+
+  button {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .userBox {
+    align-content: start;
+    padding: 0.85rem;
+  }
+
+  .userMeta {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .userEmail {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+
+  .actionsRow {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: 0.35rem;
+  }
+
+  .userMeta > button {
+    align-self: stretch;
+  }
+
+  .summary {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

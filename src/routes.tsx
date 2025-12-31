@@ -21,5 +21,5 @@ export function ProtectedRoute() {
 export function HomeRedirect() {
   const { user, isAuthLoading } = useAuth()
   if (isAuthLoading) return null
-  return <Navigate to={user ? '/planner' : '/login'} replace />
+  return <Navigate to={user ? '/home' : '/login'} replace />
 }

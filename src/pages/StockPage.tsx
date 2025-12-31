@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Line,
   LineChart,
@@ -9,9 +9,10 @@ import {
   YAxis,
 } from 'recharts'
 import { parseYyyyMmDd } from '../features/stock/eodhd'
-import { getStockCached } from '../features/stock/stockApi'
-
-const DEFAULT_SYMBOL = 'TSLY.US'
+import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
+import { getStockCached, searchStockSymbols } from '../features/stock/stockApi'
+import { useAuth } from '../auth'
+import { listWatchlist, type WatchlistItem } from '../features/watchlist/watchlistApi'
 
 type PricePoint = {
   date: string
@@ -113,8 +114,19 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function StockPage() {
-  const [searchParams] = useSearchParams()
-  const symbol = (searchParams.get('symbol') ?? DEFAULT_SYMBOL).trim().toUpperCase()
+  const { user, isAuthLoading } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  function normalizeSymbol(raw: string): string {
+    const s = raw.trim().toUpperCase()
+    if (!s) return ''
+    return s.includes('.') ? s : `${s}.US`
+  }
+
+  const symbol = useMemo(() => {
+    const raw = String(searchParams.get('symbol') ?? '')
+    return normalizeSymbol(raw)
+  }, [searchParams])
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -123,8 +135,87 @@ export default function StockPage() {
   const [eod, setEod] = useState<PricePoint[]>([])
   const [dividends, setDividends] = useState<DividendViewRow[]>([])
 
+  const [stockSearch, setStockSearch] = useState('')
+  const [stockSearchSuggestions, setStockSearchSuggestions] = useState<string[]>([])
+
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([])
+  const [watchlistLoading, setWatchlistLoading] = useState(false)
+  const [watchlistError, setWatchlistError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const q = stockSearch.trim()
+    if (!q) {
+      setStockSearchSuggestions([])
+      return
+    }
+
+    const controller = new AbortController()
+    const t = window.setTimeout(() => {
+      void searchStockSymbols(q, 10, controller.signal)
+        .then(setStockSearchSuggestions)
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === 'AbortError') return
+          setStockSearchSuggestions([])
+        })
+    }, 200)
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(t)
+    }
+  }, [stockSearch])
+
+  function onStockSearch(e: React.FormEvent) {
+    e.preventDefault()
+    const raw = stockSearch.trim()
+    if (!raw) return
+    const nextSymbol = normalizeSymbol(raw)
+    if (!nextSymbol) return
+    setSearchParams({ symbol: nextSymbol })
+  }
+
+  useEffect(() => {
+    if (symbol) return
+    if (isAuthLoading) return
+    if (!user) {
+      setWatchlistItems([])
+      setWatchlistError(null)
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        setWatchlistLoading(true)
+        setWatchlistError(null)
+        const items = await listWatchlist()
+        if (!cancelled) setWatchlistItems(items)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to load watchlist'
+        if (!cancelled) setWatchlistError(msg)
+      } finally {
+        if (!cancelled) setWatchlistLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [symbol, user, isAuthLoading])
+
   useEffect(() => {
     let cancelled = false
+
+    if (!symbol) {
+      setIsLoading(false)
+      setError(null)
+      setRealTimeRaw(null)
+      setEod([])
+      setDividends([])
+      return () => {
+        cancelled = true
+      }
+    }
 
     async function load() {
       try {
@@ -219,158 +310,256 @@ export default function StockPage() {
   return (
     <div className="page">
       <div className="pageInner">
-        <header className="stockHeader">
-          <div>
-            <div className="stockTitleRow">
-              <h1 className="stockTitle">{rt.name ?? symbol}</h1>
-              {isEtf ? <span className="chip">ETF</span> : null}
-            </div>
-            <div className="stockMeta">
-              <span>{symbol}</span>
-              {rt.exchange ? <span className="dot">•</span> : null}
-              {rt.exchange ? <span>{rt.exchange}</span> : null}
-            </div>
-          </div>
-
-          <div className="priceBox" aria-label="Current price">
-            <div className="priceValue">
-              {typeof currentPrice === 'number' ? formatMoney2(currentPrice) : '—'}
-            </div>
-            <div className="priceChange">
-              {typeof change === 'number' && typeof changePercent === 'number' ? (
-                <span>
-                  {formatSigned(change, 2)} ({formatPercent(changePercent)})
-                </span>
-              ) : (
-                <span>—</span>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {error ? (
-          <section className="panel">
-            <h2>Data error</h2>
-            <p className="error" role="alert" aria-live="polite">
-              {error}
-            </p>
-            <p className="hint">
-              Make sure the API server has `EODHD_API_TOKEN` configured and can reach
-              EODHD from the server (and that your DB is reachable for caching).
-            </p>
-          </section>
-        ) : null}
-
-        <section className="panel">
-          <h2>Price history (1M)</h2>
-          {isLoading ? (
-            <p className="empty">Loading…</p>
-          ) : eod.length === 0 ? (
-            <p className="empty">No history available.</p>
-          ) : (
-            <div className="chartWrap" aria-label="Price history chart">
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={eod} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
-                  <YAxis
-                    tick={{ fontSize: 12 }}
-                    width={56}
-                    domain={['auto', 'auto']}
-                    tickFormatter={(v: string | number) =>
-                      typeof v === 'number' ? v.toFixed(2) : String(v)
-                    }
-                  />
-                  <Tooltip
-                    formatter={(value: string | number | undefined) =>
-                      typeof value === 'number' ? formatMoney2(value) : String(value ?? '')
-                    }
-                    labelFormatter={(label: string | number) => String(label)}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="close"
-                    dot={false}
-                    stroke="var(--accent)"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </section>
-
-        <section className="panel">
-          <h2>Stats</h2>
-          <div className="statsGrid">
-            <Stat
-              label="Previous close"
-              value={
-                typeof previousClose === 'number' ? formatMoney2(previousClose) : '—'
-              }
+        <div className="stockHeaderSearch">
+          <form className="stockSearch" onSubmit={onStockSearch} role="search">
+            <SymbolAutocompleteInput
+              value={stockSearch}
+              onValueChange={setStockSearch}
+              suggestions={stockSearchSuggestions}
+              placeholder="주식, ETF 등 검색"
             />
-            <Stat
-              label="Daily range"
-              value={
-                dailyRange
-                  ? `${formatMoney2(dailyRange.low)} ~ ${formatMoney2(dailyRange.high)}`
-                  : '—'
-              }
-            />
-            <Stat
-              label="52-week range"
-              value={
-                range52w.low === 0 && range52w.high === 0
-                  ? '— (mocked)'
-                  : `${formatMoney2(range52w.low)} ~ ${formatMoney2(range52w.high)}`
-              }
-            />
-            <Stat
-              label="Average volume (30D)"
-              value={typeof avgVol30 === 'number' ? avgVol30.toLocaleString() : '—'}
-            />
-          </div>
-        </section>
+            <button type="submit" disabled={!stockSearch.trim()}>
+              Search
+            </button>
+          </form>
+        </div>
 
-        <section className="panel">
-          <h2>Dividends</h2>
-          <div className="divSummary">
-            <div>
-              <div className="statLabel">Annual dividend (last 12 months)</div>
-              <div className="divValue">{formatMoney(annualDividendSum)}</div>
-            </div>
-            <div>
-              <div className="statLabel">Dividend yield</div>
-              <div className="divValue">
-                {typeof dividendYield === 'number' ? `${dividendYield.toFixed(2)}%` : '—'}
+        {!symbol ? (
+          <div className="stockLandingGrid">
+            <section className="panel">
+              <div className="panelTabsTopRow" style={{ marginBottom: '0.5rem' }}>
+                <h2 className="panelTabsTitle" style={{ margin: 0 }}>
+                  관심 목록
+                </h2>
+                <div className="actionsRow">
+                  <Link className="linkButton" to="/watchlist">
+                    Manage
+                  </Link>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {isLoading ? (
-            <p className="empty">Loading…</p>
-          ) : dividendRowsLast6.length === 0 ? (
-            <p className="empty">No dividend history available.</p>
-          ) : (
-            <div className="tableWrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th className="num">Dividend</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dividendRowsLast6.map((d) => (
-                    <tr key={`${d.date}_${d.value}`}>
-                      <td className="mono">{d.date}</td>
-                      <td className="num mono">{formatMoney(d.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+              {isAuthLoading ? <p className="empty">Loading…</p> : !user ? (
+                <p className="empty">
+                  Login to see your watchlist. <Link className="linkButton" to="/login">Go to Login</Link>
+                </p>
+              ) : watchlistError ? (
+                <p className="error" role="alert" aria-live="polite">
+                  {watchlistError}
+                </p>
+              ) : watchlistLoading ? (
+                <p className="empty">Loading…</p>
+              ) : watchlistItems.length === 0 ? (
+                <p className="empty">No watchlist items yet.</p>
+              ) : (
+                <div className="tableWrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Symbol</th>
+                        <th>Name</th>
+                        <th className="num">Price</th>
+                        <th className="num">Change</th>
+                        <th className="num">Change %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {watchlistItems.map((it) => {
+                        const changeV = typeof it.change === 'number' ? it.change : null
+                        const changeP = typeof it.changePercent === 'number' ? it.changePercent : null
+                        const changeClass =
+                          changeV !== null ? (changeV > 0 ? 'profitPos' : changeV < 0 ? 'profitNeg' : '') : ''
+
+                        return (
+                          <tr key={it.id}>
+                            <td>
+                              <a
+                                className="linkButton"
+                                href={`/stock?symbol=${encodeURIComponent(it.symbol)}`}
+                              >
+                                {it.symbol}
+                              </a>
+                            </td>
+                            <td>{it.name ?? '—'}</td>
+                            <td className="num">{typeof it.price === 'number' ? it.price.toFixed(2) : '—'}</td>
+                            <td className={`num ${changeClass}`}>{changeV !== null ? formatSigned(changeV, 2) : '—'}</td>
+                            <td className={`num ${changeClass}`}>{changeP !== null ? formatPercent(changeP) : '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <aside className="panel">
+              <h2 style={{ marginTop: 0 }}>Quick links</h2>
+              <div className="stack">
+                <Link className="linkButton" to="/watchlist">
+                  Open Watchlist
+                </Link>
+                <Link className="linkButton" to="/home">
+                  Open Portfolio
+                </Link>
+              </div>
+            </aside>
+          </div>
+        ) : (
+          <>
+            <header className="stockHeader">
+              <div>
+                <div className="stockTitleRow">
+                  <h1 className="stockTitle">{rt.name ?? symbol}</h1>
+                  {isEtf ? <span className="chip">ETF</span> : null}
+                </div>
+                <div className="stockMeta">
+                  <span>{symbol}</span>
+                  {rt.exchange ? <span className="dot">•</span> : null}
+                  {rt.exchange ? <span>{rt.exchange}</span> : null}
+                </div>
+              </div>
+
+              <div className="priceBox" aria-label="Current price">
+                <div className="priceValue">
+                  {typeof currentPrice === 'number' ? formatMoney2(currentPrice) : '—'}
+                </div>
+                <div className="priceChange">
+                  {typeof change === 'number' && typeof changePercent === 'number' ? (
+                    <span>
+                      {formatSigned(change, 2)} ({formatPercent(changePercent)})
+                    </span>
+                  ) : (
+                    <span>—</span>
+                  )}
+                </div>
+              </div>
+            </header>
+
+            {error ? (
+              <section className="panel">
+                <h2>Data error</h2>
+                <p className="error" role="alert" aria-live="polite">
+                  {error}
+                </p>
+                <p className="hint">
+                  Make sure the API server has `EODHD_API_TOKEN` configured and can reach
+                  EODHD from the server (and that your DB is reachable for caching).
+                </p>
+              </section>
+            ) : null}
+
+            <section className="panel">
+              <h2>Price history (1M)</h2>
+              {isLoading ? (
+                <p className="empty">Loading…</p>
+              ) : eod.length === 0 ? (
+                <p className="empty">No history available.</p>
+              ) : (
+                <div className="chartWrap" aria-label="Price history chart">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={eod} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
+                      <YAxis
+                        tick={{ fontSize: 12 }}
+                        width={56}
+                        domain={['auto', 'auto']}
+                        tickFormatter={(v: string | number) =>
+                          typeof v === 'number' ? v.toFixed(2) : String(v)
+                        }
+                      />
+                      <Tooltip
+                        formatter={(value: string | number | undefined) =>
+                          typeof value === 'number' ? formatMoney2(value) : String(value ?? '')
+                        }
+                        labelFormatter={(label: string | number) => String(label)}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="close"
+                        dot={false}
+                        stroke="var(--accent)"
+                        strokeWidth={2}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </section>
+
+            <section className="panel">
+              <h2>Stats</h2>
+              <div className="statsGrid">
+                <Stat
+                  label="Previous close"
+                  value={
+                    typeof previousClose === 'number' ? formatMoney2(previousClose) : '—'
+                  }
+                />
+                <Stat
+                  label="Daily range"
+                  value={
+                    dailyRange
+                      ? `${formatMoney2(dailyRange.low)} ~ ${formatMoney2(dailyRange.high)}`
+                      : '—'
+                  }
+                />
+                <Stat
+                  label="52-week range"
+                  value={
+                    range52w.low === 0 && range52w.high === 0
+                      ? '— (mocked)'
+                      : `${formatMoney2(range52w.low)} ~ ${formatMoney2(range52w.high)}`
+                  }
+                />
+                <Stat
+                  label="Average volume (30D)"
+                  value={typeof avgVol30 === 'number' ? avgVol30.toLocaleString() : '—'}
+                />
+              </div>
+            </section>
+
+            <section className="panel">
+              <h2>Dividends</h2>
+              <div className="divSummary">
+                <div>
+                  <div className="statLabel">Annual dividend (last 12 months)</div>
+                  <div className="divValue">{formatMoney(annualDividendSum)}</div>
+                </div>
+                <div>
+                  <div className="statLabel">Dividend yield</div>
+                  <div className="divValue">
+                    {typeof dividendYield === 'number' ? `${dividendYield.toFixed(2)}%` : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {isLoading ? (
+                <p className="empty">Loading…</p>
+              ) : dividendRowsLast6.length === 0 ? (
+                <p className="empty">No dividend history available.</p>
+              ) : (
+                <div className="tableWrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th className="num">Dividend</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dividendRowsLast6.map((d) => (
+                        <tr key={`${d.date}_${d.value}`}>
+                          <td className="mono">{d.date}</td>
+                          <td className="num mono">{formatMoney(d.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
     </div>
   )
