@@ -118,6 +118,15 @@ async function fetchEodFromEodhd(symbol: string, limit: number): Promise<unknown
   return Array.isArray(rows) ? (rows as unknown[]) : []
 }
 
+async function fetchEodRangeFromEodhd(symbol: string, from: string, to: string): Promise<unknown[]> {
+  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
+  const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
+    eodhdToken,
+  )}&fmt=json&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  const rows = await eodhdFetchJson(url)
+  return Array.isArray(rows) ? (rows as unknown[]) : []
+}
+
 async function fetchDividendsFromEodhd(symbol: string): Promise<unknown[]> {
   if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
   const url = `https://eodhd.com/api/div/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
@@ -321,12 +330,29 @@ async function ensureSchema() {
       high DECIMAL(18,6) NOT NULL,
       low DECIMAL(18,6) NOT NULL,
       close DECIMAL(18,6) NOT NULL,
+      adjusted_close DECIMAL(18,6) NULL,
       volume BIGINT NULL,
       fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (symbol, date),
       INDEX idx_stock_eod_symbol_date (symbol, date)
     )`,
   )
+
+  // If upgrading from older schema, add adjusted_close if missing.
+  const [eodAdjCol] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'stock_eod'
+       AND column_name = 'adjusted_close'`,
+  )
+  const hasAdjustedClose = Number((eodAdjCol[0] as { count: number }).count) > 0
+  if (!hasAdjustedClose) {
+    await pool.execute(
+      `ALTER TABLE stock_eod
+       ADD COLUMN adjusted_close DECIMAL(18,6) NULL AFTER close`,
+    )
+  }
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS stock_dividends (
@@ -697,6 +723,50 @@ async function ensureExchangeSymbolsCached(exchangeRaw: string, maxAgeMs: number
   }
 }
 
+async function loadExchangeSymbolNames(
+  pairs: Array<{ exchange: string; symbol: string }>,
+): Promise<Record<string, string>> {
+  const grouped = new Map<string, string[]>()
+  for (const p of pairs) {
+    const exchange = String(p.exchange ?? '').trim().toUpperCase() || 'US'
+    const symbol = toSymbol(p.symbol)
+    if (!symbol) continue
+    const arr = grouped.get(exchange) ?? []
+    arr.push(symbol)
+    grouped.set(exchange, arr)
+  }
+
+  const out: Record<string, string> = {}
+  for (const [exchange, list] of grouped) {
+    const unique = Array.from(new Set(list)).filter(Boolean)
+    if (unique.length === 0) continue
+
+    const params: Record<string, unknown> = { exchange }
+    const names: string[] = []
+    unique.forEach((s, idx) => {
+      const key = `s${idx}`
+      params[key] = s
+      names.push(`:${key}`)
+    })
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT symbol, name
+       FROM eodhd_exchange_symbols
+       WHERE exchange = :exchange AND symbol IN (${names.join(', ')})`,
+      params,
+    )
+
+    for (const r of rows as unknown as Array<{ symbol?: unknown; name?: unknown }>) {
+      const sym = toSymbol(r.symbol)
+      const name = typeof r.name === 'string' ? r.name.trim() : ''
+      if (!sym || !name) continue
+      out[`${exchange}:${sym}`] = name
+    }
+  }
+
+  return out
+}
+
 async function getRealtimeFetchedAtMs(symbols: string[]): Promise<Record<string, number>> {
   const unique = Array.from(new Set(symbols.map((s) => toSymbol(s)).filter(Boolean)))
   if (unique.length === 0) return {}
@@ -785,6 +855,7 @@ type StockEodRow = {
   high: number
   low: number
   close: number
+  adjustedClose: number | null
   volume: number | null
 }
 
@@ -793,7 +864,9 @@ async function loadStockEod(symbol: string, limit: number): Promise<StockEodRow[
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT
         DATE_FORMAT(date, '%Y-%m-%d') AS date,
-        open, high, low, close, volume
+        open, high, low, close,
+        adjusted_close AS adjustedClose,
+        volume
      FROM stock_eod
      WHERE symbol = :symbol
      ORDER BY date DESC
@@ -802,6 +875,55 @@ async function loadStockEod(symbol: string, limit: number): Promise<StockEodRow[
   )
   const parsed = (rows as unknown as StockEodRow[]).filter((r) => Boolean(r?.date))
   return parsed.reverse()
+}
+
+type StockEodRangeRow = {
+  date: string
+  close: number
+  adjustedClose: number | null
+  volume: number | null
+}
+
+async function loadStockEodRange(symbol: string, from: string, to: string): Promise<StockEodRangeRow[]> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT
+        DATE_FORMAT(date, '%Y-%m-%d') AS date,
+        close,
+        adjusted_close AS adjustedClose,
+        volume
+     FROM stock_eod
+     WHERE symbol = :symbol AND date >= :from AND date <= :to
+     ORDER BY date ASC`,
+    { symbol, from, to },
+  )
+  return rows as unknown as StockEodRangeRow[]
+}
+
+async function shouldRefreshEodRange(symbol: string, from: string, to: string, maxAgeMs: number): Promise<boolean> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT
+        COUNT(*) AS cnt,
+        MAX(fetched_at) AS lastFetched
+     FROM stock_eod
+     WHERE symbol = :symbol AND date >= :from AND date <= :to`,
+    { symbol, from, to },
+  )
+  const row = rows[0] as unknown as { cnt: number; lastFetched: unknown } | undefined
+  const cnt = Number(row?.cnt ?? 0)
+  if (cnt <= 0) return true
+  const last = toMs(row?.lastFetched)
+  if (!last) return true
+  return Date.now() - last > maxAgeMs
+}
+
+async function ensureEodRangeCached(symbol: string, from: string, to: string): Promise<'db' | 'api'> {
+  // Cache window: refresh at most once per 24h per symbol+range.
+  const needs = await shouldRefreshEodRange(symbol, from, to, 24 * 60 * 60 * 1000)
+  if (!needs) return 'db'
+
+  const rows = await fetchEodRangeFromEodhd(symbol, from, to)
+  await upsertStockEod(symbol, rows)
+  return 'api'
 }
 
 async function upsertStockEod(symbol: string, rows: unknown[]): Promise<void> {
@@ -816,24 +938,146 @@ async function upsertStockEod(symbol: string, rows: unknown[]): Promise<void> {
     const close = Number(r.close)
     if (![open, high, low, close].every((v) => Number.isFinite(v))) continue
 
+    const adjRaw = (r.adjusted_close ?? r.adjustedClose ?? r.adj_close ?? null) as unknown
+    const adjustedClose = adjRaw === null || adjRaw === undefined ? null : Number(adjRaw)
+    const adjustedCloseSafe =
+      adjustedClose !== null && Number.isFinite(adjustedClose) ? adjustedClose : null
+
     const volumeRaw = r.volume
     const volume = volumeRaw === null || volumeRaw === undefined ? null : Number(volumeRaw)
     const volumeSafe =
       volume !== null && Number.isFinite(volume) ? Math.floor(volume) : null
 
     await pool.execute(
-      `INSERT INTO stock_eod (symbol, date, open, high, low, close, volume, fetched_at)
-       VALUES (:symbol, :date, :open, :high, :low, :close, :volume, CURRENT_TIMESTAMP)
+      `INSERT INTO stock_eod (symbol, date, open, high, low, close, adjusted_close, volume, fetched_at)
+       VALUES (:symbol, :date, :open, :high, :low, :close, :adjustedClose, :volume, CURRENT_TIMESTAMP)
        ON DUPLICATE KEY UPDATE
          open = VALUES(open),
          high = VALUES(high),
          low = VALUES(low),
          close = VALUES(close),
+         adjusted_close = VALUES(adjusted_close),
          volume = VALUES(volume),
          fetched_at = VALUES(fetched_at)`,
-      { symbol, date, open, high, low, close, volume: volumeSafe },
+      { symbol, date, open, high, low, close, adjustedClose: adjustedCloseSafe, volume: volumeSafe },
     )
   }
+}
+
+function isoDateOrNull(v: unknown): string | null {
+  return toSqlDate(v)
+}
+
+function splitSymbol(symbolWithExchange: string): { symbol: string; exchange: string } {
+  const s = toSymbol(symbolWithExchange)
+  const parts = s.split('.')
+  if (parts.length >= 2) {
+    return { symbol: parts.slice(0, -1).join('.'), exchange: parts[parts.length - 1] as string }
+  }
+  return { symbol: s, exchange: 'US' }
+}
+
+function clamp01(x: number): number {
+  if (!Number.isFinite(x)) return 0
+  return Math.max(0, Math.min(1, x))
+}
+
+function minMaxNormalize(values: number[]): number[] {
+  const finite = values.filter((v) => Number.isFinite(v))
+  if (finite.length === 0) return values.map(() => 0)
+  const min = Math.min(...finite)
+  const max = Math.max(...finite)
+  if (max === min) return values.map(() => 0.5)
+  return values.map((v) => clamp01((v - min) / (max - min)))
+}
+
+function computeMaxDrawdown(closes: number[]): number {
+  // Max drawdown is a fraction in [0,1].
+  let peak = -Infinity
+  let maxDd = 0
+  for (const c of closes) {
+    if (!Number.isFinite(c) || c <= 0) continue
+    if (c > peak) peak = c
+    if (peak > 0) {
+      const dd = (peak - c) / peak
+      if (dd > maxDd) maxDd = dd
+    }
+  }
+  return clamp01(maxDd)
+}
+
+function nearestCloseOnOrAfter(points: Array<{ date: string; close: number }>, targetIso: string): number | null {
+  for (const p of points) {
+    if (p.date >= targetIso) return p.close
+  }
+  return points.length ? points[0]!.close : null
+}
+
+function addMonthsIso(iso: string, months: number): string {
+  const [y, m, d] = iso.split('-').map((x) => Number(x))
+  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1))
+  dt.setUTCMonth(dt.getUTCMonth() + months)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+type RecommendedStock = {
+  symbol: string
+  exchange: string
+  name: string
+  type: 'STOCK' | 'ETF'
+  price: number
+  score: number
+  reason: string
+}
+
+function computeRecommendationsFromEod(
+  items: Array<{
+    symbol: string
+    exchange: string
+    name: string | null
+    type: 'STOCK' | 'ETF'
+    price: number | null
+    dividendFlag: 0 | 1
+    avgVolume: number
+    maxDrawdown: number
+    return3m: number
+  }>,
+): RecommendedStock[] {
+  const returnN = minMaxNormalize(items.map((x) => x.return3m))
+  const ddN = minMaxNormalize(items.map((x) => x.maxDrawdown))
+  const volN = minMaxNormalize(items.map((x) => x.avgVolume))
+
+  const out: RecommendedStock[] = items.map((x, i) => {
+    const score =
+      returnN[i]! * 0.4 - ddN[i]! * 0.3 + volN[i]! * 0.2 + x.dividendFlag * 0.1
+
+    const reasonParts = [
+      `3M return ${(x.return3m * 100).toFixed(2)}%`,
+      `1Y max drawdown ${(x.maxDrawdown * 100).toFixed(2)}%`,
+      `avg volume ${Math.round(x.avgVolume).toLocaleString()}`,
+    ]
+    if (x.dividendFlag) reasonParts.push('dividends detected')
+
+    const name = x.name?.trim() ? x.name.trim() : x.symbol
+
+    return {
+      symbol: x.symbol,
+      exchange: x.exchange,
+      name,
+      type: x.type,
+      price: typeof x.price === 'number' ? x.price : NaN,
+      score: Number(score.toFixed(6)),
+      reason: reasonParts.join(', '),
+    }
+  })
+
+  return out
+    .filter((x) => Number.isFinite(x.price))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
 }
 
 type StockDividendRow = {
@@ -1840,6 +2084,318 @@ app.get('/api/watchlist/search', async (req, res) => {
 
     const symbols = (rows as unknown as Array<{ symbol?: unknown }>).map((r) => toSymbol(r.symbol)).filter(Boolean)
     res.json({ symbols })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// EODHD symbol list (cached): public endpoints for browsing/searching.
+// - GET /api/symbols/search?q=TSL&exchange=US&limit=10
+// - GET /api/symbols?q=TESLA&exchange=US&limit=100&offset=0
+// ---------------------------------------------------------------------------
+
+app.get('/api/symbols/search', async (req, res) => {
+  try {
+    await ensureSchema()
+
+    const q = toSymbol(req.query.q)
+    if (!q) {
+      res.json({ symbols: [] })
+      return
+    }
+
+    const exchange = String(req.query.exchange ?? 'US').trim().toUpperCase() || 'US'
+    const limit = Math.max(1, Math.min(50, Math.floor(Number(req.query.limit ?? '10'))))
+
+    // Cache symbol list ~7 days, but avoid hard failing if token is missing.
+    if (hasEodhdToken) {
+      await ensureExchangeSymbolsCached(exchange, 7 * 24 * 60 * 60 * 1000)
+    }
+
+    const like = `${q}%`
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT symbol
+       FROM eodhd_exchange_symbols
+       WHERE exchange = :exchange AND symbol LIKE :like
+       ORDER BY symbol
+       LIMIT ${limit}`,
+      { exchange, like },
+    )
+
+    const symbols = (rows as unknown as Array<{ symbol?: unknown }>).map((r) => toSymbol(r.symbol)).filter(Boolean)
+    res.json({ symbols })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.get('/api/symbols', async (req, res) => {
+  try {
+    await ensureSchema()
+
+    const exchange = String(req.query.exchange ?? 'US').trim().toUpperCase() || 'US'
+    const qRaw = String(req.query.q ?? '').trim()
+    const q = qRaw.toUpperCase()
+
+    const limit = Math.max(1, Math.min(200, Math.floor(Number(req.query.limit ?? '100'))))
+    const offset = Math.max(0, Math.min(50_000, Math.floor(Number(req.query.offset ?? '0'))))
+
+    // Cache symbol list ~7 days, but avoid hard failing if token is missing.
+    if (hasEodhdToken) {
+      await ensureExchangeSymbolsCached(exchange, 7 * 24 * 60 * 60 * 1000)
+    }
+
+    const where: string[] = ['exchange = :exchange']
+    const params: Record<string, unknown> = { exchange }
+
+    if (q) {
+      // Symbol prefix match; name substring match.
+      where.push('(symbol LIKE :symLike OR name LIKE :nameLike)')
+      params.symLike = `${q}%`
+      params.nameLike = `%${q}%`
+    }
+
+    const [countRows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT COUNT(*) AS total
+       FROM eodhd_exchange_symbols
+       WHERE ${where.join(' AND ')}`,
+      params,
+    )
+    const total = Number((countRows as any)?.[0]?.total ?? 0)
+
+    // Fetch one extra to compute hasMore without relying on total.
+    const effectiveLimit = limit + 1
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT symbol, name, type, currency
+       FROM eodhd_exchange_symbols
+       WHERE ${where.join(' AND ')}
+       ORDER BY symbol
+       LIMIT ${effectiveLimit} OFFSET ${offset}`,
+      params,
+    )
+
+    const parsed = (rows as unknown as Array<{ symbol?: unknown; name?: unknown; type?: unknown; currency?: unknown }>).map(
+      (r) => ({
+        symbol: toSymbol(r.symbol),
+        name: typeof r.name === 'string' ? r.name : r.name == null ? null : String(r.name),
+        type: typeof r.type === 'string' ? r.type : r.type == null ? null : String(r.type),
+        currency: typeof r.currency === 'string' ? r.currency : r.currency == null ? null : String(r.currency),
+      }),
+    )
+
+    const hasMore = parsed.length > limit
+    const items = hasMore ? parsed.slice(0, limit) : parsed
+    res.json({ exchange, q: qRaw, limit, offset, total, hasMore, items })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// FEATURE 1: Historical EOD chart data (EODHD only)
+// GET /api/eod/{symbol}.{exchange}?from=YYYY-MM-DD&to=YYYY-MM-DD
+// ---------------------------------------------------------------------------
+
+app.get('/api/eod/:symbol', async (req, res) => {
+  try {
+    await ensureSchema()
+
+    const symbol = normalizeWatchlistSymbol(req.params.symbol)
+    if (!symbol) {
+      res.status(400).json({ error: 'Symbol is required' })
+      return
+    }
+
+    const from = isoDateOrNull(req.query.from)
+    const to = isoDateOrNull(req.query.to)
+    if (!from || !to) {
+      res.status(400).json({ error: 'from and to are required (YYYY-MM-DD)' })
+      return
+    }
+
+    const source = await ensureEodRangeCached(symbol, from, to)
+    const rows = await loadStockEodRange(symbol, from, to)
+
+    // Adjusted close preferred; fall back to close.
+    const points = rows
+      .filter((r) => typeof r.date === 'string')
+      .map((r) => {
+        const close =
+          typeof r.adjustedClose === 'number'
+            ? r.adjustedClose
+            : typeof r.close === 'number'
+              ? r.close
+              : null
+        return close === null ? null : { date: r.date, close }
+      })
+      .filter(Boolean)
+
+    res.json({ symbol, from, to, source, points })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// FEATURE 2: Rule-based recommendations (EODHD only)
+// ---------------------------------------------------------------------------
+
+app.get('/api/recommendations', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+
+    // Candidate universe (deterministic + explainable):
+    // - If logged-in: user's watchlist.
+    // - If logged-out: globally cached symbols (no extra EODHD calls).
+    let symbols: string[] = []
+    if (user) {
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT symbol FROM watchlist_items WHERE user_id = :userId ORDER BY created_at DESC`,
+        { userId: user.id },
+      )
+      symbols = (rows as unknown as Array<{ symbol?: unknown }>).map((r) => toSymbol(r.symbol)).filter(Boolean)
+    } else {
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT symbol
+         FROM stock_eod
+         GROUP BY symbol
+         ORDER BY MAX(fetched_at) DESC
+         LIMIT 40`,
+      )
+      symbols = (rows as unknown as Array<{ symbol?: unknown }>).map((r) => toSymbol(r.symbol)).filter(Boolean)
+    }
+
+    if (symbols.length === 0) {
+      res.json({ items: [] })
+      return
+    }
+
+    // Best-effort: map symbol -> name using the cached exchange list (same source as /symbols).
+    // For logged-out users we do not trigger remote EODHD calls here.
+    const namePairs = symbols.map((full) => splitSymbol(full))
+    const exchangeNameMap = await loadExchangeSymbolNames(namePairs)
+
+    const today = new Date()
+    const toIso = today.toISOString().slice(0, 10)
+    const fromIso = addMonthsIso(toIso, -12)
+    const from3mIso = addMonthsIso(toIso, -3)
+
+    const now = Date.now()
+
+    // Logged-in users: we can fetch missing data with gentle pacing.
+    if (user) {
+      // Ensure required EOD data exists in cache.
+      await mapWithConcurrency(symbols, 2, async (s, idx) => {
+        if (idx > 0) await sleep(220)
+        await ensureEodRangeCached(s, fromIso, toIso)
+      })
+
+      // Fundamentals (dividends/type/name) are slower; fetch only if missing/stale (~30d).
+      const fundFetched = await getFundamentalsFetchedAtMs(symbols)
+      const fundMaxAgeMs = 30 * 24 * 60 * 60 * 1000
+      const fundToFetch = symbols.filter((s) => !fundFetched[s] || now - fundFetched[s]! > fundMaxAgeMs)
+      await mapWithConcurrency(fundToFetch, 1, async (s, idx) => {
+        if (idx > 0) await sleep(300)
+        const f = await fetchFundamentalsFromEodhd(s)
+        await upsertFundamentals(s, f)
+      })
+
+      // Quotes refresh (best-effort): keep realtime relatively fresh for logged-in views.
+      const rtFetched = await getRealtimeFetchedAtMs(symbols)
+      const rtMaxAgeMs = 5 * 60 * 1000
+      const rtToFetch = symbols.filter((s) => !rtFetched[s] || now - rtFetched[s]! > rtMaxAgeMs)
+      await mapWithConcurrency(rtToFetch, 2, async (s, idx) => {
+        if (idx > 0) await sleep(200)
+        const rt = await fetchRealTimeFromEodhd(s)
+        await upsertStockRealtime(s, rt)
+      })
+    }
+
+    const enriched: Array<{
+      symbol: string
+      exchange: string
+      name: string | null
+      type: 'STOCK' | 'ETF'
+      price: number | null
+      dividendFlag: 0 | 1
+      avgVolume: number
+      maxDrawdown: number
+      return3m: number
+    }> = []
+
+    for (const fullSymbol of symbols) {
+      const split = splitSymbol(fullSymbol)
+      const exchange = split.exchange
+      const baseSymbol = split.symbol
+
+      const eodRows = await loadStockEodRange(fullSymbol, fromIso, toIso)
+      const points = eodRows
+        .map((r) => {
+          const close =
+            typeof r.adjustedClose === 'number'
+              ? r.adjustedClose
+              : typeof r.close === 'number'
+                ? r.close
+                : null
+          return close === null || !r.date ? null : { date: r.date, close }
+        })
+        .filter(Boolean) as Array<{ date: string; close: number }>
+
+      if (points.length < 10) continue
+
+      const lastClose = points[points.length - 1]!.close
+      const close3m = nearestCloseOnOrAfter(points, from3mIso)
+      const return3m = close3m && close3m !== 0 ? lastClose / close3m - 1 : 0
+
+      const maxDrawdown = computeMaxDrawdown(points.map((p) => p.close))
+
+      const vols = eodRows
+        .map((r) => r.volume)
+        .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0)
+      const avgVolume = vols.length ? vols.reduce((a, b) => a + b, 0) / vols.length : 0
+
+      const fund = await loadFundamentalsWithMeta(fullSymbol)
+      const meta = extractFundamentalsMeta(fund?.payload ?? null)
+      const nameFromList = exchangeNameMap[`${exchange}:${toSymbol(baseSymbol)}`]
+      const name = nameFromList || meta.name || null
+
+      // Dividend preference: use fundamentals when available.
+      const fundObj = (fund?.payload ?? {}) as any
+      const general = fundObj?.General ?? fundObj?.general ?? null
+      const rawType = typeof general?.Type === 'string' ? general.Type : typeof general?.type === 'string' ? general.type : ''
+      const type: 'STOCK' | 'ETF' = String(rawType).toLowerCase() === 'etf' || fundObj?.ETF_Data ? 'ETF' : 'STOCK'
+
+      const dividendYield =
+        typeof fundObj?.ETF_Data?.DividendYield === 'number'
+          ? fundObj.ETF_Data.DividendYield
+          : typeof fundObj?.Highlights?.DividendYield === 'number'
+            ? fundObj.Highlights.DividendYield
+            : typeof fundObj?.highlights?.dividendYield === 'number'
+              ? fundObj.highlights.dividendYield
+              : null
+      const dividendFlag: 0 | 1 = dividendYield !== null && Number.isFinite(dividendYield) && dividendYield > 0 ? 1 : 0
+
+      const rtRow = await loadStockRealtimeWithMeta(fullSymbol)
+      const q = normalizeRealtimeQuote(rtRow?.payload ?? null)
+      const price = typeof q.price === 'number' ? q.price : lastClose
+
+      enriched.push({
+        symbol: fullSymbol,
+        exchange,
+        name,
+        type,
+        price,
+        dividendFlag,
+        avgVolume,
+        maxDrawdown,
+        return3m,
+      })
+    }
+
+    const items = computeRecommendationsFromEod(enriched)
+    res.json({ items })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }

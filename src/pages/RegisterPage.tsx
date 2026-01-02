@@ -2,7 +2,10 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import UserAuth from '../UserAuth'
 import { useAuth } from '../auth'
-import DividendPlanner, { type PlannerHolding, type UpdateHoldingInput } from '../features/planner/DividendPlanner'
+import DividendPlanner, {
+  type PlannerHolding,
+  type UpdateHoldingInput,
+} from '../features/planner/DividendPlanner'
 
 function createId() {
   const c = globalThis.crypto
@@ -10,7 +13,7 @@ function createId() {
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`
 }
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const { user, isAuthLoading, setUser } = useAuth()
   const navigate = useNavigate()
   const [stockSearch, setStockSearch] = useState('')
@@ -74,7 +77,7 @@ export default function LoginPage() {
               <div className="loginCard">
                 <UserAuth
                   user={user}
-                  fixedMode="login"
+                  fixedMode="register"
                   hideTabs
                   onUserChange={(next) => {
                     setUser(next)

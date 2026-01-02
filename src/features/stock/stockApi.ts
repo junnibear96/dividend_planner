@@ -54,13 +54,27 @@ export async function searchStockSymbols(
 ): Promise<string[]> {
   const q = query.trim().toUpperCase()
   if (!q) return []
-  const url = `/api/stocks/symbols?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(
-    String(limit),
-  )}`
-  const res = await fetch(url, { signal })
-  const body = (await jsonOrError(res)) as { symbols?: unknown }
-  const arr = Array.isArray(body.symbols) ? body.symbols : []
-  return arr
-    .map((s) => String(s ?? '').trim().toUpperCase())
-    .filter(Boolean)
+
+  const normalize = (arr: unknown[]) =>
+    arr.map((s) => String(s ?? '').trim().toUpperCase()).filter(Boolean)
+
+  // Prefer the full EODHD exchange symbol cache (public endpoint).
+  try {
+    const url = `/api/symbols/search?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(
+      String(limit),
+    )}`
+    const res = await fetch(url, { signal })
+    const body = (await jsonOrError(res)) as { symbols?: unknown }
+    const arr = Array.isArray(body.symbols) ? body.symbols : []
+    return normalize(arr)
+  } catch {
+    // Fallback: local cached symbols only.
+    const url = `/api/stocks/symbols?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(
+      String(limit),
+    )}`
+    const res = await fetch(url, { signal })
+    const body = (await jsonOrError(res)) as { symbols?: unknown }
+    const arr = Array.isArray(body.symbols) ? body.symbols : []
+    return normalize(arr)
+  }
 }

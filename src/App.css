@@ -51,6 +51,13 @@
   gap: 0.5rem;
 }
 
+.topNavRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .navTab {
   display: inline-flex;
   align-items: center;
@@ -688,9 +695,13 @@
   align-items: start;
 }
 
-@media (min-width: 980px) {
+/*
+  Public stock page uses this grid for Chart + Recommendations.
+  Keep it stacked on mid-width screens to avoid overly narrow Name columns.
+*/
+@media (min-width: 1100px) {
   .stockLandingGrid {
-    grid-template-columns: 1.35fr 0.9fr;
+    grid-template-columns: 1fr 1.25fr;
   }
 }
 

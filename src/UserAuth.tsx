@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react'
 import type { SessionUser } from './auth'
 
+type AuthMode = 'login' | 'register'
+
 type Props = {
   user: SessionUser | null
   onUserChange: (next: SessionUser | null) => void
+  fixedMode?: AuthMode
+  hideTabs?: boolean
 }
 
 async function jsonOrNull(res: Response) {
@@ -14,8 +18,9 @@ async function jsonOrNull(res: Response) {
   }
 }
 
-export default function UserAuth({ user, onUserChange }: Props) {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Props) {
+  const [modeInternal, setModeInternal] = useState<AuthMode>('login')
+  const mode: AuthMode = fixedMode ?? modeInternal
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -85,25 +90,27 @@ export default function UserAuth({ user, onUserChange }: Props) {
   return (
     <div className="userBox">
       <div className="userMeta">
-        <div className="userLabel">Account</div>
-        <div className="userTabs" role="tablist" aria-label="Auth mode">
-          <button
-            type="button"
-            className={mode === 'login' ? 'tab active' : 'tab'}
-            onClick={() => setMode('login')}
-            disabled={isBusy}
-          >
-            Log in
-          </button>
-          <button
-            type="button"
-            className={mode === 'register' ? 'tab active' : 'tab'}
-            onClick={() => setMode('register')}
-            disabled={isBusy}
-          >
-            Register
-          </button>
-        </div>
+        {!fixedMode && !hideTabs ? <div className="userLabel">Account</div> : null}
+        {!hideTabs && !fixedMode ? (
+          <div className="userTabs" role="tablist" aria-label="Auth mode">
+            <button
+              type="button"
+              className={mode === 'login' ? 'tab active' : 'tab'}
+              onClick={() => setModeInternal('login')}
+              disabled={isBusy}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              className={mode === 'register' ? 'tab active' : 'tab'}
+              onClick={() => setModeInternal('register')}
+              disabled={isBusy}
+            >
+              Register
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <form className="userForm" onSubmit={submit}>
