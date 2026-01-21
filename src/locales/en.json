@@ -1,0 +1,376 @@
+{
+    "nav": {
+        "home": "Home",
+        "stock": "Stock",
+        "symbols": "Symbols",
+        "watchlist": "Watchlist",
+        "planner": "Planner",
+        "reinvest": "Reinvest",
+        "logout": "Logout",
+        "login": "Login"
+    },
+    "watchlist": {
+        "title": "Watchlist",
+        "subtitle": "EODHD (cached) quotes + fundamentals",
+        "items": "Items",
+        "searchPlaceholder": "Add symbol (e.g. TSLY or TSLY.US)",
+        "refreshing": "Refreshing…",
+        "refresh": "Refresh",
+        "adding": "Adding…",
+        "add": "Add",
+        "empty": "No watchlist items yet.",
+        "table": {
+            "symbol": "Symbol",
+            "name": "Name",
+            "price": "Price",
+            "change": "Change",
+            "changePercent": "Change %",
+            "actions": "Actions",
+            "remove": "Remove"
+        }
+    },
+    "stock": {
+        "searchPlaceholder": "Search Stock, ETF, etc.",
+        "search": "Search",
+        "watchlist": {
+            "title": "Watchlist",
+            "manage": "Manage",
+            "loginPrompt": "Login to see your watchlist.",
+            "loginLink": "Go to Login",
+            "error": "Failed to load watchlist",
+            "loading": "Loading…",
+            "empty": "No watchlist items yet."
+        },
+        "quickLinks": {
+            "title": "Quick links",
+            "openWatchlist": "Open Watchlist",
+            "openPortfolio": "Open Portfolio"
+        },
+        "error": {
+            "title": "Data error",
+            "hint": "Make sure the API server has `EODHD_API_TOKEN` configured and can reach EODHD from the server (and that your DB is reachable for caching)."
+        },
+        "stats": {
+            "title": "Stats",
+            "previousClose": "Previous close",
+            "dailyRange": "Daily range",
+            "range52w": "52-week range",
+            "avgVolume": "Average volume (30D)"
+        },
+        "dividends": {
+            "title": "Dividends",
+            "annualSum": "Annual dividend (last 12 months)",
+            "yield": "Dividend yield",
+            "loading": "Loading…",
+            "empty": "No dividend history available.",
+            "table": {
+                "date": "Date",
+                "dividend": "Dividend"
+            }
+        }
+    },
+    "auth": {
+        "signedIn": "Signed in",
+        "logout": "Log out",
+        "account": "Account",
+        "login": "Log in",
+        "register": "Register",
+        "email": "Email",
+        "emailPlaceholder": "you@example.com",
+        "password": "Password",
+        "passwordPlaceholderLogin": "Your password",
+        "passwordPlaceholderRegister": "At least 8 characters",
+        "createAccount": "Create account",
+        "requestFailed": "Request failed",
+        "signInTitle": "Sign in",
+        "toApp": "to Dividend Planner"
+    },
+    "landing": {
+        "appTitle": "Dividend Planner",
+        "subtitle": "Plan and estimate dividend income.",
+        "searchPlaceholder": "Search symbol (e.g., TSLY.US)",
+        "search": "Search"
+    },
+    "portfolio": {
+        "summary": {
+            "title": "Available Cash",
+            "edit": "Edit",
+            "save": "Save",
+            "saving": "Saving…",
+            "cancel": "Cancel",
+            "invalidAmount": "Invalid amount",
+            "failedToSave": "Failed to save"
+        },
+        "home": {
+            "title": "Home",
+            "subtitle": "Today’s portfolio snapshot.",
+            "searchPlaceholder": "Search symbol (e.g. TSLY.US)",
+            "search": "Search",
+            "totalValue": "Total value",
+            "profit": "Profit",
+            "problem": "Problem",
+            "addTitle": "Add stock/etf",
+            "symbolLabel": "Symbol",
+            "amountLabel": "Amount",
+            "buyPriceLabel": "Buy price (optional)",
+            "buyPricePlaceholder": "e.g. 37.50",
+            "amountPlaceholder": "e.g. 10",
+            "symbolPlaceholder": "e.g. TSLY.US",
+            "add": "Add",
+            "portfolioTitle": "Portfolio",
+            "loading": "Loading…",
+            "empty": "No positions yet.",
+            "remove": "Remove"
+        },
+        "table": {
+            "symbol": "Symbol",
+            "price": "Price",
+            "change": "Change",
+            "buyPrice": "Buy price",
+            "amount": "Amount",
+            "value": "Value",
+            "profit": "Profit",
+            "actions": "Actions"
+        }
+    },
+    "planner": {
+        "title": "Dividend Planner",
+        "subtitle": "Plan and estimate dividend income.",
+        "reinvest": "Reinvest",
+        "openPage": "Open Planner",
+        "searchPlaceholder": "Search symbol (e.g., TSLY.US)",
+        "search": "Search",
+        "errors": {
+            "loginToAdd": "Please log in to add holdings.",
+            "cannotAdd": "Cannot add holdings.",
+            "symbolRequired": "Symbol is required.",
+            "sharesPositive": "Shares must be a positive number.",
+            "dividendPositive": "Dividend/share must be a positive number.",
+            "invalidNumber": "Invalid number input.",
+            "saveFailed": "Failed to save holding",
+            "loginToRemove": "Please log in to remove holdings.",
+            "cannotRemove": "Cannot remove holdings.",
+            "deleteFailed": "Failed to delete holding",
+            "loginToEdit": "Please log in to edit holdings.",
+            "cannotEdit": "Cannot edit holdings.",
+            "updateFailed": "Failed to update holding",
+            "loadFailed": "Failed to load holdings"
+        },
+        "holdingModal": {
+            "title": "Edit holding",
+            "close": "Close",
+            "shares": "Shares",
+            "dividendPerShare": "Dividend / share (USD)",
+            "saveChanges": "Save changes"
+        },
+        "summary": {
+            "title": "Estimated totals",
+            "yearly": "Yearly",
+            "monthly": "Monthly",
+            "weekly": "Weekly"
+        },
+        "add": {
+            "title": "Add holding",
+            "symbolLabel": "Symbol",
+            "symbolPlaceholder": "e.g. AAPL",
+            "sharesLabel": "Shares",
+            "sharesPlaceholder": "e.g. 10",
+            "dividendLabel": "Dividend / share (USD)",
+            "dividendPlaceholder": "e.g. 1.00",
+            "frequency": {
+                "weekly": "Weekly",
+                "monthly": "Monthly",
+                "yearly": "Yearly"
+            },
+            "submit": "Add holding",
+            "tip": "Tip: enter dividend per share for the selected frequency in USD."
+        },
+        "sections": {
+            "weeklyTitle": "Weekly dividend income",
+            "monthlyTitle": "Monthly dividend income",
+            "yearlyTitle": "Yearly dividend income",
+            "totalTitle": "Total dividend (annualized estimate)"
+        },
+        "table": {
+            "loading": "Loading…",
+            "empty": "No holdings yet.",
+            "emptyWeekly": "No weekly dividend holdings.",
+            "emptyMonthly": "No monthly dividend holdings.",
+            "emptyYearly": "No yearly dividend holdings.",
+            "reinvestCandidates": "Reinvest candidates",
+            "symbol": "Symbol",
+            "shares": "Shares",
+            "dividendPerShare": "Dividend / share",
+            "income": "Income",
+            "includeInReinvestment": "Include in reinvestment",
+            "edit": "Edit",
+            "remove": "Remove",
+            "totalLabel": "Total"
+        },
+        "annualizedTable": {
+            "weeklyTotal": "Weekly total",
+            "monthlyTotal": "Monthly total",
+            "yearlyTotal": "Yearly total",
+            "total": "Total"
+        }
+    },
+    "common": {
+        "loading": "Loading…",
+        "close": "Close",
+        "cancel": "Cancel",
+        "back": "Back",
+        "prev": "Prev",
+        "next": "Next",
+        "symbolSuggestions": "Symbol suggestions",
+        "backToPlanner": "Back to Planner",
+        "refresh": "Refresh",
+        "reset": "Reset",
+        "save": "Save",
+        "addAsset": "Add asset",
+        "remove": "Remove",
+        "errors": {
+            "positiveNumbers": "Please enter valid positive numbers."
+        }
+    },
+    "symbols": {
+        "title": "All stocks (EODHD)",
+        "subtitle": "Browse the cached EODHD symbol list (exchange: {{exchange}}).",
+        "searchLabel": "Search (symbol or name)",
+        "searchPlaceholder": "AAPL, TSLA, SPY, Tesla…",
+        "backToStock": "Back to Stock",
+        "noSymbols": "No symbols found.",
+        "query": "Query: {{query}}",
+        "pager": {
+            "showing": "Showing {{start}}–{{end}} of {{total}}"
+        },
+        "table": {
+            "symbol": "Symbol",
+            "name": "Name",
+            "type": "Type",
+            "currency": "Currency"
+        },
+        "errors": {
+            "loadFailed": "Failed to load symbols"
+        }
+    },
+    "modal": {
+        "removeTitle": "Remove {{symbol}}",
+        "removeQuestion": "Did you sell this position or do you just want to remove it?",
+        "sold": "Sold",
+        "justDelete": "Just Delete",
+        "sellDetails": "Enter the sale details to update your cash balance.",
+        "sellingPrice": "Selling Price",
+        "amountSold": "Amount Sold",
+        "totalProceeds": "Total Proceeds:",
+        "confirmSale": "Confirm Sale"
+    },
+    "chart": {
+        "title": "Price history ({{range}})",
+        "close": "Close",
+        "dailyChange": "Daily change",
+        "rangeSelector": "Range selector",
+        "selectSymbol": "Select a symbol to view the chart.",
+        "noHistory": "No history available.",
+        "ariaLabel": "Historical price chart",
+        "loadFailed": "Failed to load chart"
+    },
+    "reinvestment": {
+        "title": "Reinvestment",
+        "subtitle": "Plan Week 1–4 reinvestment rules and review history.",
+        "week": "Week {{week}}",
+        "weeks": "Weeks",
+        "summary": {
+            "cashAvailable": "Dividend Cash Available",
+            "nextScheduled": "Next Scheduled Reinvestment"
+        },
+        "settings": {
+            "title": "Reinvestment settings",
+            "scheduleMode": "Schedule mode",
+            "weekMode": "Week 1–4 (different destinations)",
+            "fixedMode": "Fixed schedule",
+            "schedule": "Schedule",
+            "source": "Source",
+            "destination": "Destination",
+            "weekSuffix": " (Week {{week}})",
+            "weekCascade": "Editing Week {{editWeek}} applies to {{range}}.",
+            "destinationSymbol": "Destination symbol",
+            "destinationBasket": "Destination basket",
+            "minAmount": "Minimum Amount (USD)",
+            "fractional": "Fractional shares allowed",
+            "resetTitle": "Reset settings",
+            "confirmReset": "Reset reinvestment settings to the last saved values?",
+            "frequency": {
+                "weekly": "Weekly",
+                "biweekly": "Bi-weekly",
+                "monthly": "Monthly"
+            },
+            "sourceTypes": {
+                "all": "All holdings",
+                "selected": "Selected holdings (checkboxes in holdings tables)"
+            },
+            "destinationTypes": {
+                "same": "Same as source",
+                "single": "Single asset",
+                "basket": "Allocation basket"
+            }
+        },
+        "history": {
+            "title": "Reinvestment history",
+            "date": "Date/time",
+            "week": "Week",
+            "amount": "Amount",
+            "from": "From",
+            "to": "To",
+            "shares": "Shares",
+            "price": "Price",
+            "empty": "No reinvestment history."
+        },
+        "table": {
+            "symbol": "Symbol",
+            "weight": "Weight"
+        },
+        "errors": {
+            "weekError": "Week {{week}}: {{error}}",
+            "destinationSymbolRequired": "Destination symbol is required.",
+            "basketEmpty": "Destination basket must have at least 1 asset.",
+            "basketSymbolEmpty": "Basket contains an empty symbol.",
+            "basketWeightPositive": "Basket weights must be > 0.",
+            "basketTotalPositive": "Basket total weight must be > 0.",
+            "fixWeekSettings": "Fix Week 1–4 settings before saving. ({{count}} issues)",
+            "fixSettings": "Fix settings before saving. ({{count}} issues)",
+            "loadSummaryFailed": "Failed to load reinvestment summary",
+            "loadHistoryFailed": "Failed to load reinvestment history",
+            "updateFailed": "Failed to update reinvestment rule"
+        }
+    },
+    "timeline": {
+        "summary": {
+            "title": "Summary",
+            "subtitle": "{{month}} {{year}} — weekly slices with compounding across months."
+        },
+        "week": "Week {{week}}",
+        "metric": {
+            "dividendEarned": "Dividend earned",
+            "reinvested": "Reinvested amount",
+            "assetsPurchased": "Assets purchased",
+            "sharesAdded": "Shares added",
+            "totalShares": "Total shares after",
+            "nextDividendChange": "Next-week dividend change"
+        },
+        "ariaLabel": "Dividend reinvestment timeline",
+        "errors": {
+            "loadFailed": "Failed to load timeline data",
+            "missingRule": "Missing reinvestment rule"
+        },
+        "header": {
+            "monthYearNavigation": "Month and year navigation",
+            "prevMonth": "Previous month",
+            "nextMonth": "Next month",
+            "selectMonth": "Select month",
+            "selectYear": "Select year",
+            "months": "Months",
+            "years": "Years",
+            "selectedMonthYear": "Selected month and year"
+        }
+    }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
 import PortfolioSummary from './PortfolioSummary'
 import SellDeleteModal from './SellDeleteModal'
@@ -104,6 +105,7 @@ async function loadQuote(symbol: string): Promise<QuoteView> {
 }
 
 export default function HomePage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
 
   const [stockSearch, setStockSearch] = useState('')
@@ -422,8 +424,8 @@ export default function HomePage() {
       <div className="pageInner">
         <header className="portfolioHeader">
           <div>
-            <h1>Home</h1>
-            <p className="subtitle">Today’s portfolio snapshot.</p>
+            <h1>{t('portfolio.home.title')}</h1>
+            <p className="subtitle">{t('portfolio.home.subtitle')}</p>
           </div>
 
           <div className="portfolioHeaderRight">
@@ -432,15 +434,15 @@ export default function HomePage() {
                 value={stockSearch}
                 onValueChange={setStockSearch}
                 suggestions={stockSearchSuggestions}
-                placeholder="Search symbol (e.g. TSLY.US)"
+                placeholder={t('portfolio.home.searchPlaceholder')}
               />
               <button type="submit" disabled={!stockSearch.trim()}>
-                Search
+                {t('portfolio.home.search')}
               </button>
             </form>
 
             <div className="summaryCard">
-              <div className="summaryKey">Total value</div>
+              <div className="summaryKey">{t('portfolio.home.totalValue')}</div>
               <div className="summaryValue">{formatMoney2(totals.totalValue)}</div>
               <div
                 className={
@@ -451,10 +453,10 @@ export default function HomePage() {
               >
                 {typeof totals.profit === 'number' && typeof totals.profitPercent === 'number' ? (
                   <span>
-                    Profit ${formatSigned(totals.profit, 2)} ({formatPercent(totals.profitPercent)})
+                    {t('portfolio.home.profit')} ${formatSigned(totals.profit, 2)} ({formatPercent(totals.profitPercent)})
                   </span>
                 ) : (
-                  <span>Profit —</span>
+                  <span>{t('portfolio.home.profit')} —</span>
                 )}
               </div>
             </div>
@@ -463,7 +465,7 @@ export default function HomePage() {
 
         {error ? (
           <section className="panel">
-            <h2>Problem</h2>
+            <h2>{t('portfolio.home.problem')}</h2>
             <p className="error" role="alert" aria-live="polite">
               {error}
             </p>
@@ -471,36 +473,36 @@ export default function HomePage() {
         ) : null}
 
         <section className="panel">
-          <h2>Add stock/etf</h2>
+          <h2>{t('portfolio.home.addTitle')}</h2>
           <form className="form" onSubmit={addPosition}>
             <label className="field">
-              <span>Symbol</span>
+              <span>{t('portfolio.home.symbolLabel')}</span>
               <SymbolAutocompleteInput
                 value={symbolDraft}
                 onValueChange={setSymbolDraft}
                 suggestions={suggestions}
-                placeholder="e.g. TSLY.US"
+                placeholder={t('portfolio.home.symbolPlaceholder')}
                 disabled={isSaving}
               />
             </label>
 
             <label className="field">
-              <span>Amount</span>
+              <span>{t('portfolio.home.amountLabel')}</span>
               <input
                 value={amountDraft}
                 onChange={(e) => setAmountDraft(e.target.value)}
-                placeholder="e.g. 10"
+                placeholder={t('portfolio.home.amountPlaceholder')}
                 inputMode="decimal"
                 disabled={isSaving}
               />
             </label>
 
             <label className="field">
-              <span>Buy price (optional)</span>
+              <span>{t('portfolio.home.buyPriceLabel')}</span>
               <input
                 value={buyPriceDraft}
                 onChange={(e) => setBuyPriceDraft(e.target.value)}
-                placeholder="e.g. 37.50"
+                placeholder={t('portfolio.home.buyPricePlaceholder')}
                 inputMode="decimal"
                 disabled={isSaving}
               />
@@ -508,7 +510,7 @@ export default function HomePage() {
 
             <div className="actions">
               <button type="submit" disabled={isSaving || !symbolDraft.trim() || !amountDraft.trim()}>
-                Add
+                {t('portfolio.home.add')}
               </button>
             </div>
           </form>
@@ -517,24 +519,24 @@ export default function HomePage() {
         <PortfolioSummary />
 
         <section className="panel">
-          <h2>Portfolio</h2>
+          <h2>{t('portfolio.home.portfolioTitle')}</h2>
           {isLoading ? (
-            <p className="empty">Loading…</p>
+            <p className="empty">{t('portfolio.home.loading')}</p>
           ) : positions.length === 0 ? (
-            <p className="empty">No positions yet.</p>
+            <p className="empty">{t('portfolio.home.empty')}</p>
           ) : (
             <div className="tableWrap">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th className="num">Price</th>
-                    <th className="num">Change</th>
-                    <th className="num">Buy price</th>
-                    <th className="num">Amount</th>
-                    <th className="num">Value</th>
-                    <th className="num">Profit</th>
-                    <th className="num">Actions</th>
+                    <th>{t('portfolio.table.symbol')}</th>
+                    <th className="num">{t('portfolio.table.price')}</th>
+                    <th className="num">{t('portfolio.table.change')}</th>
+                    <th className="num">{t('portfolio.table.buyPrice')}</th>
+                    <th className="num">{t('portfolio.table.amount')}</th>
+                    <th className="num">{t('portfolio.table.value')}</th>
+                    <th className="num">{t('portfolio.table.profit')}</th>
+                    <th className="num">{t('portfolio.table.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -621,7 +623,7 @@ export default function HomePage() {
                               onClick={() => void saveRowAmount(p.id)}
                               disabled={isRowSaving}
                             >
-                              {isRowSaving ? 'Saving…' : 'Save'}
+                              {isRowSaving ? t('portfolio.summary.saving') : t('portfolio.summary.save')}
                             </button>
                             <button
                               type="button"
@@ -630,7 +632,7 @@ export default function HomePage() {
                               disabled={isRowSaving}
                               style={{ background: 'color-mix(in oklab, var(--danger) 15%, transparent)', color: 'var(--danger)' }}
                             >
-                              Remove
+                              {t('portfolio.home.remove')}
                             </button>
                           </div>
                         </td>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Line,
   LineChart,
@@ -116,6 +117,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export default function StockPage() {
   const { user, isAuthLoading } = useAuth()
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
 
   function normalizeSymbol(raw: string): string {
@@ -317,10 +319,10 @@ export default function StockPage() {
               value={stockSearch}
               onValueChange={setStockSearch}
               suggestions={stockSearchSuggestions}
-              placeholder="주식, ETF 등 검색"
+              placeholder={t('stock.searchPlaceholder')}
             />
             <button type="submit" disabled={!stockSearch.trim()}>
-              Search
+              {t('stock.search')}
             </button>
           </form>
         </div>
@@ -330,37 +332,37 @@ export default function StockPage() {
             <section className="panel">
               <div className="panelTabsTopRow" style={{ marginBottom: '0.5rem' }}>
                 <h2 className="panelTabsTitle" style={{ margin: 0 }}>
-                  관심 목록
+                  {t('stock.watchlist.title')}
                 </h2>
                 <div className="actionsRow">
                   <Link className="linkButton" to="/watchlist">
-                    Manage
+                    {t('stock.watchlist.manage')}
                   </Link>
                 </div>
               </div>
 
-              {isAuthLoading ? <p className="empty">Loading…</p> : !user ? (
+              {isAuthLoading ? <p className="empty">{t('stock.watchlist.loading')}</p> : !user ? (
                 <p className="empty">
-                  Login to see your watchlist. <Link className="linkButton" to="/login">Go to Login</Link>
+                  {t('stock.watchlist.loginPrompt')} <Link className="linkButton" to="/login">{t('stock.watchlist.loginLink')}</Link>
                 </p>
               ) : watchlistError ? (
                 <p className="error" role="alert" aria-live="polite">
                   {watchlistError}
                 </p>
               ) : watchlistLoading ? (
-                <p className="empty">Loading…</p>
+                <p className="empty">{t('stock.watchlist.loading')}</p>
               ) : watchlistItems.length === 0 ? (
-                <p className="empty">No watchlist items yet.</p>
+                <p className="empty">{t('stock.watchlist.empty')}</p>
               ) : (
                 <div className="tableWrap">
                   <table className="table">
                     <thead>
                       <tr>
-                        <th>Symbol</th>
-                        <th>Name</th>
-                        <th className="num">Price</th>
-                        <th className="num">Change</th>
-                        <th className="num">Change %</th>
+                        <th>{t('watchlist.table.symbol')}</th>
+                        <th>{t('watchlist.table.name')}</th>
+                        <th className="num">{t('watchlist.table.price')}</th>
+                        <th className="num">{t('watchlist.table.change')}</th>
+                        <th className="num">{t('watchlist.table.changePercent')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -394,13 +396,13 @@ export default function StockPage() {
             </section>
 
             <aside className="panel">
-              <h2 style={{ marginTop: 0 }}>Quick links</h2>
+              <h2 style={{ marginTop: 0 }}>{t('stock.quickLinks.title')}</h2>
               <div className="stack">
                 <Link className="linkButton" to="/watchlist">
-                  Open Watchlist
+                  {t('stock.quickLinks.openWatchlist')}
                 </Link>
                 <Link className="linkButton" to="/home">
-                  Open Portfolio
+                  {t('stock.quickLinks.openPortfolio')}
                 </Link>
               </div>
             </aside>
@@ -438,13 +440,12 @@ export default function StockPage() {
 
             {error ? (
               <section className="panel">
-                <h2>Data error</h2>
+                <h2>{t('stock.error.title')}</h2>
                 <p className="error" role="alert" aria-live="polite">
                   {error}
                 </p>
                 <p className="hint">
-                  Make sure the API server has `EODHD_API_TOKEN` configured and can reach
-                  EODHD from the server (and that your DB is reachable for caching).
+                  {t('stock.error.hint')}
                 </p>
               </section>
             ) : null}
@@ -454,16 +455,16 @@ export default function StockPage() {
             </div>
 
             <section className="panel">
-              <h2>Stats</h2>
+              <h2>{t('stock.stats.title')}</h2>
               <div className="statsGrid">
                 <Stat
-                  label="Previous close"
+                  label={t('stock.stats.previousClose')}
                   value={
                     typeof previousClose === 'number' ? formatMoney2(previousClose) : '—'
                   }
                 />
                 <Stat
-                  label="Daily range"
+                  label={t('stock.stats.dailyRange')}
                   value={
                     dailyRange
                       ? `${formatMoney2(dailyRange.low)} ~ ${formatMoney2(dailyRange.high)}`
@@ -471,7 +472,7 @@ export default function StockPage() {
                   }
                 />
                 <Stat
-                  label="52-week range"
+                  label={t('stock.stats.range52w')}
                   value={
                     range52w.low === 0 && range52w.high === 0
                       ? '— (mocked)'
@@ -479,21 +480,21 @@ export default function StockPage() {
                   }
                 />
                 <Stat
-                  label="Average volume (30D)"
+                  label={t('stock.stats.avgVolume')}
                   value={typeof avgVol30 === 'number' ? avgVol30.toLocaleString() : '—'}
                 />
               </div>
             </section>
 
             <section className="panel">
-              <h2>Dividends</h2>
+              <h2>{t('stock.dividends.title')}</h2>
               <div className="divSummary">
                 <div>
-                  <div className="statLabel">Annual dividend (last 12 months)</div>
+                  <div className="statLabel">{t('stock.dividends.annualSum')}</div>
                   <div className="divValue">{formatMoney(annualDividendSum)}</div>
                 </div>
                 <div>
-                  <div className="statLabel">Dividend yield</div>
+                  <div className="statLabel">{t('stock.dividends.yield')}</div>
                   <div className="divValue">
                     {typeof dividendYield === 'number' ? `${dividendYield.toFixed(2)}%` : '—'}
                   </div>
@@ -501,16 +502,16 @@ export default function StockPage() {
               </div>
 
               {isLoading ? (
-                <p className="empty">Loading…</p>
+                <p className="empty">{t('stock.dividends.loading')}</p>
               ) : dividendRowsLast6.length === 0 ? (
-                <p className="empty">No dividend history available.</p>
+                <p className="empty">{t('stock.dividends.empty')}</p>
               ) : (
                 <div className="tableWrap">
                   <table className="table">
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th className="num">Dividend</th>
+                        <th>{t('stock.dividends.table.date')}</th>
+                        <th className="num">{t('stock.dividends.table.dividend')}</th>
                       </tr>
                     </thead>
                     <tbody>

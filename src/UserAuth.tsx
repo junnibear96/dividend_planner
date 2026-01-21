@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { SessionUser } from './auth'
 
 type AuthMode = 'login' | 'register'
@@ -19,6 +20,7 @@ async function jsonOrNull(res: Response) {
 }
 
 export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Props) {
+  const { t } = useTranslation()
   const [modeInternal, setModeInternal] = useState<AuthMode>('login')
   const mode: AuthMode = fixedMode ?? modeInternal
   const [email, setEmail] = useState('')
@@ -49,7 +51,7 @@ export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Pr
 
       if (!res.ok) {
         const body = (await jsonOrNull(res)) as { error?: string } | null
-        throw new Error(body?.error ?? `Request failed (${res.status})`)
+        throw new Error(body?.error ?? `${t('auth.requestFailed')} (${res.status})`)
       }
 
       const body = (await res.json()) as { user: SessionUser }
@@ -57,7 +59,7 @@ export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Pr
       setPassword('')
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed')
+      setError(err instanceof Error ? err.message : t('auth.requestFailed'))
     } finally {
       setIsBusy(false)
     }
@@ -77,11 +79,11 @@ export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Pr
     return (
       <div className="userBox">
         <div className="userMeta">
-          <div className="userLabel">Signed in</div>
+          <div className="userLabel">{t('auth.signedIn')}</div>
           <div className="userEmail">{user.email}</div>
         </div>
         <button type="button" onClick={logout} disabled={isBusy}>
-          Log out
+          {t('auth.logout')}
         </button>
       </div>
     )
@@ -90,7 +92,7 @@ export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Pr
   return (
     <div className="userBox">
       <div className="userMeta">
-        {!fixedMode && !hideTabs ? <div className="userLabel">Account</div> : null}
+        {!fixedMode && !hideTabs ? <div className="userLabel">{t('auth.account')}</div> : null}
         {!hideTabs && !fixedMode ? (
           <div className="userTabs" role="tablist" aria-label="Auth mode">
             <button
@@ -99,7 +101,7 @@ export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Pr
               onClick={() => setModeInternal('login')}
               disabled={isBusy}
             >
-              Log in
+              {t('auth.login')}
             </button>
             <button
               type="button"
@@ -107,7 +109,7 @@ export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Pr
               onClick={() => setModeInternal('register')}
               disabled={isBusy}
             >
-              Register
+              {t('auth.register')}
             </button>
           </div>
         ) : null}
@@ -115,27 +117,27 @@ export default function UserAuth({ user, onUserChange, fixedMode, hideTabs }: Pr
 
       <form className="userForm" onSubmit={submit}>
         <label className="field">
-          <span>Email</span>
+          <span>{t('auth.email')}</span>
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder={t('auth.emailPlaceholder')}
             autoComplete="email"
           />
         </label>
         <label className="field">
-          <span>Password</span>
+          <span>{t('auth.password')}</span>
           <input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
             autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            placeholder={mode === 'login' ? 'Your password' : 'At least 8 characters'}
+            placeholder={mode === 'login' ? t('auth.passwordPlaceholderLogin') : t('auth.passwordPlaceholderRegister')}
           />
         </label>
         <div className="actions">
           <button type="submit" disabled={!canSubmit}>
-            {mode === 'login' ? 'Log in' : 'Create account'}
+            {mode === 'login' ? t('auth.login') : t('auth.createAccount')}
           </button>
         </div>
       </form>

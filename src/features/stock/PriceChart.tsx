@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Line,
   LineChart,
@@ -22,6 +23,7 @@ function PriceChartTooltip({
   label?: string | number
   payload?: TooltipPayload[]
 }) {
+  const { t } = useTranslation()
   if (!active || !payload || payload.length === 0) return null
 
   const point = payload[0]?.payload
@@ -42,9 +44,9 @@ function PriceChartTooltip({
         {String(label ?? point.date)}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: 6 }}>
-        <div style={{ color: 'var(--muted)' }}>Close</div>
+        <div style={{ color: 'var(--muted)' }}>{t('chart.close')}</div>
         <div style={{ textAlign: 'right' }}>{formatMoney2(point.close)}</div>
-        <div style={{ color: 'var(--muted)' }}>Daily change</div>
+        <div style={{ color: 'var(--muted)' }}>{t('chart.dailyChange')}</div>
         <div style={{ textAlign: 'right' }}>
           {typeof point.changePct === 'number' ? formatPercent(point.changePct) : '—'}
         </div>
@@ -123,6 +125,7 @@ type Props = {
 }
 
 export default function PriceChart({ symbol }: Props) {
+  const { t } = useTranslation()
   const [range, setRange] = useState<RangeKey>('1M')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -151,7 +154,7 @@ export default function PriceChart({ symbol }: Props) {
           setRawPoints(Array.isArray(res.points) ? res.points : [])
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load chart')
+        if (!cancelled) setError(err instanceof Error ? err.message : t('chart.loadFailed'))
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -167,8 +170,8 @@ export default function PriceChart({ symbol }: Props) {
   return (
     <section className="panel">
       <div className="panelTabsTopRow" style={{ marginBottom: '1rem' }}>
-        <h2 className="panelTabsTitle" style={{ margin: 0 }}>Price history ({range})</h2>
-        <div className="actionsRow" aria-label="Range selector" style={{ gap: '0.25rem' }}>
+        <h2 className="panelTabsTitle" style={{ margin: 0 }}>{t('chart.title', { range })}</h2>
+        <div className="actionsRow" aria-label={t('chart.rangeSelector')} style={{ gap: '0.25rem' }}>
           {(['1W', '1M', '3M', '6M', '1Y', 'MAX'] as const).map((k) => (
             <button
               key={k}
@@ -190,18 +193,18 @@ export default function PriceChart({ symbol }: Props) {
         </div>
       </div>
 
-      {!symbol.trim() ? <p className="empty">Select a symbol to view the chart.</p> : null}
+      {!symbol.trim() ? <p className="empty">{t('chart.selectSymbol')}</p> : null}
       {error ? (
         <p className="error" role="alert" aria-live="polite">{error}</p>
       ) : null}
 
       {symbol.trim() ? (
         isLoading ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('common.loading')}</p>
         ) : points.length === 0 ? (
-          <p className="empty">No history available.</p>
+          <p className="empty">{t('chart.noHistory')}</p>
         ) : (
-          <div className="chartWrap" aria-label="Historical price chart">
+          <div className="chartWrap" aria-label={t('chart.ariaLabel')}>
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={points} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} interval="preserveStartEnd" />

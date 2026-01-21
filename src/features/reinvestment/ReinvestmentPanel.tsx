@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   fetchReinvestmentHistory,
   fetchReinvestmentSummary,
@@ -70,6 +71,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const [isRuleSaving, setIsRuleSaving] = useState(false)
   const editWeek = props.activeWeek
+  const { t } = useTranslation()
 
   function cloneRule(rule: ReinvestmentRule): ReinvestmentRule {
     return JSON.parse(JSON.stringify(rule)) as ReinvestmentRule
@@ -90,7 +92,8 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
       setReinvestmentSummary(null)
       setDraftRule(null)
       setBaselineRule(null)
-      setReinvestmentSummaryError(err instanceof Error ? err.message : 'Failed to load reinvestment summary')
+
+      setReinvestmentSummaryError(err instanceof Error ? err.message : t('reinvestment.errors.loadSummaryFailed'))
     } finally {
       setIsReinvestmentSummaryLoading(false)
     }
@@ -102,9 +105,10 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
       setReinvestmentHistoryError(null)
       const data = await fetchReinvestmentHistory(50)
       setReinvestmentHistory(Array.isArray(data.executions) ? data.executions : [])
+
     } catch (err) {
       setReinvestmentHistory([])
-      setReinvestmentHistoryError(err instanceof Error ? err.message : 'Failed to load reinvestment history')
+      setReinvestmentHistoryError(err instanceof Error ? err.message : t('reinvestment.errors.loadHistoryFailed'))
     } finally {
       setIsReinvestmentHistoryLoading(false)
     }
@@ -187,8 +191,9 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
       })
       await loadReinvestmentSummary()
       await loadReinvestmentHistory()
+
     } catch (err) {
-      setReinvestmentSummaryError(err instanceof Error ? err.message : 'Failed to update reinvestment rule')
+      setReinvestmentSummaryError(err instanceof Error ? err.message : t('reinvestment.errors.updateFailed'))
     } finally {
       setIsRuleSaving(false)
     }
@@ -215,25 +220,25 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
 
     if (destination.destinationType === 'SINGLE_ASSET') {
       const symbol = (destination.destinationAssets[0]?.symbol ?? '').trim()
-      if (!symbol) errors.push('Destination symbol is required.')
+      if (!symbol) errors.push(t('reinvestment.errors.destinationSymbolRequired'))
     }
 
     if (destination.destinationType === 'ALLOCATION_BASKET') {
       const assets = Array.isArray(destination.destinationAssets) ? destination.destinationAssets : []
       if (assets.length === 0) {
-        errors.push('Destination basket must have at least 1 asset.')
+        errors.push(t('reinvestment.errors.basketEmpty'))
         return errors
       }
 
       let totalWeight = 0
       for (const a of assets) {
         const symbol = (a.symbol ?? '').trim()
-        if (!symbol) errors.push('Basket contains an empty symbol.')
+        if (!symbol) errors.push(t('reinvestment.errors.basketSymbolEmpty'))
         const w = Number(a.weight ?? 0)
-        if (!Number.isFinite(w) || w <= 0) errors.push('Basket weights must be > 0.')
+        if (!Number.isFinite(w) || w <= 0) errors.push(t('reinvestment.errors.basketWeightPositive'))
         if (Number.isFinite(w) && w > 0) totalWeight += w
       }
-      if (totalWeight <= 0) errors.push('Basket total weight must be > 0.')
+      if (totalWeight <= 0) errors.push(t('reinvestment.errors.basketTotalPositive'))
     }
 
     return Array.from(new Set(errors))
@@ -250,7 +255,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
       for (const w of [1, 2, 3, 4] as const) {
         const d = effectiveDestinationForWeek(draftRule, w)
         const errs = validateDestination(d)
-        for (const e of errs) allErrors.push(`Week ${w}: ${e}`)
+        for (const e of errs) allErrors.push(t('reinvestment.errors.weekError', { week: w, error: e }))
       }
     } else {
       for (const e of activeWeekErrors) allErrors.push(e)
@@ -270,25 +275,25 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
       ) : null}
 
       <section className="panel" aria-label="Reinvestment summary">
-        <h2>Reinvestment</h2>
+        <h2>{t('reinvestment.title')}</h2>
         <div className="summary" style={{ marginTop: 8 }}>
           <div className="summaryCard">
-            <div className="summaryKey">Dividend Cash Available</div>
+            <div className="summaryKey">{t('reinvestment.summary.cashAvailable')}</div>
             <div className="summaryValue">{summaryCash}</div>
           </div>
           <div className="summaryCard">
-            <div className="summaryKey">Next Scheduled Reinvestment</div>
+            <div className="summaryKey">{t('reinvestment.summary.nextScheduled')}</div>
             <div className="summaryValue">{nextDate}</div>
           </div>
           <button type="button" onClick={() => { void loadReinvestmentSummary(); void loadReinvestmentHistory() }} disabled={isReinvestmentSummaryLoading}>
-            Refresh
+            {t('common.refresh')}
           </button>
         </div>
       </section>
 
       <section className="panel">
-        <h2>Reinvestment settings</h2>
-        {isReinvestmentSummaryLoading && !draftRule ? <p className="empty">Loading…</p> : null}
+        <h2>{t('reinvestment.settings.title')}</h2>
+        {isReinvestmentSummaryLoading && !draftRule ? <p className="empty">{t('common.loading')}</p> : null}
         {!draftRule ? null : (
           <form
             className="form modalForm"
@@ -300,7 +305,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
             }}
           >
             <label className="field">
-              <span>Schedule mode</span>
+              <span>{t('reinvestment.settings.scheduleMode')}</span>
               <select
                 value={draftRule.scheduleMode}
                 onChange={(e) => {
@@ -318,14 +323,14 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                 }}
                 disabled={isRuleSaving}
 
-              > <option value="WEEK_OF_MONTH">Week 1–4 (different destinations)</option>
-                <option value="FIXED">Fixed schedule</option>
+              > <option value="WEEK_OF_MONTH">{t('reinvestment.settings.weekMode')}</option>
+                <option value="FIXED">{t('reinvestment.settings.fixedMode')}</option>
               </select>
             </label>
 
             {draftRule.scheduleMode === 'FIXED' ? (
               <label className="field">
-                <span>Schedule</span>
+                <span>{t('reinvestment.settings.schedule')}</span>
                 <select
                   value={draftRule.frequency}
                   onChange={(e) => {
@@ -334,15 +339,15 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                   }}
                   disabled={isRuleSaving}
                 >
-                  <option value="weekly">Weekly</option>
-                  <option value="biweekly">Bi-weekly</option>
-                  <option value="monthly">Monthly</option>
+                  <option value="weekly">{t('reinvestment.settings.frequency.weekly')}</option>
+                  <option value="biweekly">{t('reinvestment.settings.frequency.biweekly')}</option>
+                  <option value="monthly">{t('reinvestment.settings.frequency.monthly')}</option>
                 </select>
               </label>
             ) : null}
 
             <label className="field">
-              <span>Source</span>
+              <span>{t('reinvestment.settings.source')}</span>
               <select
                 value={draftRule.sourceScope}
                 onChange={(e) => {
@@ -351,8 +356,8 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                 }}
                 disabled={isRuleSaving}
               >
-                <option value="ALL">All holdings</option>
-                <option value="SELECTED">Selected holdings (checkboxes in holdings tables)</option>
+                <option value="ALL">{t('reinvestment.settings.sourceTypes.all')}</option>
+                <option value="SELECTED">{t('reinvestment.settings.sourceTypes.selected')}</option>
               </select>
             </label>
 
@@ -360,9 +365,9 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
               const active =
                 draftRule.scheduleMode === 'WEEK_OF_MONTH'
                   ? (draftRule.weekDestinations?.[editWeek] ?? {
-                      destinationType: draftRule.destinationType,
-                      destinationAssets: draftRule.destinationAssets,
-                    })
+                    destinationType: draftRule.destinationType,
+                    destinationAssets: draftRule.destinationAssets,
+                  })
                   : { destinationType: draftRule.destinationType, destinationAssets: draftRule.destinationAssets }
 
               function setActiveDestination(next: {
@@ -391,7 +396,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
               return (
                 <>
                   <label className="field">
-                    <span>Destination{draftRule.scheduleMode === 'WEEK_OF_MONTH' ? ` (Week ${editWeek})` : ''}</span>
+                    <span>{t('reinvestment.settings.destination')}{draftRule.scheduleMode === 'WEEK_OF_MONTH' ? t('reinvestment.settings.weekSuffix', { week: editWeek }) : ''}</span>
                     <select
                       value={active.destinationType}
                       onChange={(e) => {
@@ -408,13 +413,13 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                       }}
                       disabled={isRuleSaving}
                     >
-                      <option value="SAME_AS_SOURCE">Same as source</option>
-                      <option value="SINGLE_ASSET">Single asset</option>
-                      <option value="ALLOCATION_BASKET">Allocation basket</option>
+                      <option value="SAME_AS_SOURCE">{t('reinvestment.settings.destinationTypes.same')}</option>
+                      <option value="SINGLE_ASSET">{t('reinvestment.settings.destinationTypes.single')}</option>
+                      <option value="ALLOCATION_BASKET">{t('reinvestment.settings.destinationTypes.basket')}</option>
                     </select>
                     {draftRule.scheduleMode === 'WEEK_OF_MONTH' ? (
                       <p className="hint">
-                        Editing Week {editWeek} applies to {editWeek === 4 ? 'Week 4' : `Week ${editWeek}–4`}.
+                        {t('reinvestment.settings.weekCascade', { editWeek, range: editWeek === 4 ? t('reinvestment.week', { week: 4 }) : `Week ${editWeek}–4` })}
                       </p>
                     ) : null}
                     {validation.activeWeekErrors.length ? (
@@ -426,7 +431,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
 
                   {active.destinationType === 'SINGLE_ASSET' ? (
                     <label className="field">
-                      <span>Destination symbol</span>
+                      <span>{t('reinvestment.settings.destinationSymbol')}</span>
                       <input
                         value={active.destinationAssets[0]?.symbol ?? ''}
                         onChange={(e) => {
@@ -442,7 +447,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                   {active.destinationType === 'ALLOCATION_BASKET' ? (
                     <div className="field">
                       <div className="fieldLabelRow">
-                        <span>Destination basket</span>
+                        <span>{t('reinvestment.settings.destinationBasket')}</span>
                         <button
                           type="button"
                           className="linkButton"
@@ -454,15 +459,15 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                           }}
                           disabled={isRuleSaving}
                         >
-                          Add asset
+                          {t('common.addAsset')}
                         </button>
                       </div>
                       <div className="tableWrap modalTableWrap">
                         <table className="table">
                           <thead>
                             <tr>
-                              <th>Symbol</th>
-                              <th className="num">Weight</th>
+                              <th>{t('reinvestment.table.symbol')}</th>
+                              <th className="num">{t('reinvestment.table.weight')}</th>
                               <th />
                             </tr>
                           </thead>
@@ -507,7 +512,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                                     }}
                                     disabled={isRuleSaving || active.destinationAssets.length <= 1}
                                   >
-                                    Remove
+                                    {t('common.remove')}
                                   </button>
                                 </td>
                               </tr>
@@ -522,7 +527,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
             })()}
 
             <label className="field">
-              <span>Minimum Amount (USD)</span>
+              <span>{t('reinvestment.settings.minAmount')}</span>
               <input
                 type="number"
                 min={0}
@@ -539,7 +544,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
             </label>
 
             <label className="field checkboxField">
-              <span>Fractional shares allowed</span>
+              <span>{t('reinvestment.settings.fractional')}</span>
               <input
                 type="checkbox"
                 checked={draftRule.fractionalSharesAllowed}
@@ -559,18 +564,18 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                 }}
                 disabled={!baselineRule || isRuleSaving}
               >
-                Reset
+                {t('common.reset')}
               </button>
               <button type="submit" disabled={!canSave}>
-                Save
+                {t('common.save')}
               </button>
             </div>
 
             {validation.errors.length ? (
               <div className="error" role="alert" aria-live="polite">
                 {draftRule.scheduleMode === 'WEEK_OF_MONTH'
-                  ? `Fix Week 1–4 settings before saving. (${validation.errors.length} issue${validation.errors.length === 1 ? '' : 's'})`
-                  : `Fix settings before saving. (${validation.errors.length} issue${validation.errors.length === 1 ? '' : 's'})`}
+                  ? t('reinvestment.errors.fixWeekSettings', { count: validation.errors.length })
+                  : t('reinvestment.errors.fixSettings', { count: validation.errors.length })}
               </div>
             ) : null}
           </form>
@@ -585,15 +590,15 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
             if (e.target === e.currentTarget) setIsResetConfirmOpen(false)
           }}
         >
-          <div className="modalDialog" role="dialog" aria-modal="true" aria-label="Confirm reset" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="modalDialog" role="dialog" aria-modal="true" aria-label={t('reinvestment.settings.resetTitle')} onMouseDown={(e) => e.stopPropagation()}>
             <div className="modalHeader">
-              <div className="modalTitle">Reset settings</div>
+              <div className="modalTitle">{t('reinvestment.settings.resetTitle')}</div>
             </div>
             <div className="stack">
-              <p className="empty">Reset reinvestment settings to the last saved values?</p>
+              <p className="empty">{t('reinvestment.settings.confirmReset')}</p>
               <div className="actionsRow" style={{ justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => setIsResetConfirmOpen(false)} autoFocus>
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
@@ -608,7 +613,7 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
                   }}
                   disabled={!baselineRule}
                 >
-                  Reset
+                  {t('common.reset')}
                 </button>
               </div>
             </div>
@@ -617,27 +622,27 @@ export default function ReinvestmentPanel(props: ReinvestmentPanelProps) {
       ) : null}
 
       <section className="panel">
-        <h2>Reinvestment history</h2>
+        <h2>{t('reinvestment.history.title')}</h2>
         {isReinvestmentHistoryLoading ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('common.loading')}</p>
         ) : reinvestmentHistoryError ? (
           <p className="error" role="alert" aria-live="polite">
             {reinvestmentHistoryError}
           </p>
         ) : historyRows.length === 0 ? (
-          <p className="empty">No reinvestment history.</p>
+          <p className="empty">{t('reinvestment.history.empty')}</p>
         ) : (
           <div className="tableWrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Date/time</th>
-                  <th className="num">Week</th>
-                  <th className="num">Amount</th>
-                  <th>From</th>
-                  <th>To</th>
-                  <th className="num">Shares</th>
-                  <th className="num">Price</th>
+                  <th>{t('reinvestment.history.date')}</th>
+                  <th className="num">{t('reinvestment.history.week')}</th>
+                  <th className="num">{t('reinvestment.history.amount')}</th>
+                  <th>{t('reinvestment.history.from')}</th>
+                  <th>{t('reinvestment.history.to')}</th>
+                  <th className="num">{t('reinvestment.history.shares')}</th>
+                  <th className="num">{t('reinvestment.history.price')}</th>
                 </tr>
               </thead>
               <tbody>

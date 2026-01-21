@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 type SellDeleteModalProps = {
     isOpen: boolean
@@ -23,6 +24,7 @@ export default function SellDeleteModal({
     const [priceStr, setPriceStr] = useState('')
     const [amountStr, setAmountStr] = useState('')
     const firstInputRef = useRef<HTMLInputElement>(null)
+    const { t } = useTranslation()
 
     useEffect(() => {
         if (isOpen) {
@@ -47,7 +49,7 @@ export default function SellDeleteModal({
     function handleSoldSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (isNaN(price) || price < 0 || isNaN(amount) || amount <= 0) {
-            alert('Please enter valid positive numbers.')
+            alert(t('common.errors.positiveNumbers'))
             return
         }
         onConfirmSold(price, amount)
@@ -57,14 +59,14 @@ export default function SellDeleteModal({
         <div className="modalOverlay" onClick={onClose}>
             <div className="modalDialog" onClick={(e) => e.stopPropagation()}>
                 <div className="modalHeader">
-                    <h3 className="modalTitle">Remove {symbol}</h3>
-                    <button onClick={onClose} className="modalClose" aria-label="Close">×</button>
+                    <h3 className="modalTitle">{t('modal.removeTitle', { symbol })}</h3>
+                    <button onClick={onClose} className="modalClose" aria-label={t('common.close')}>×</button>
                 </div>
 
                 {step === 'choice' && (
                     <div className="modalBody">
                         <p style={{ marginBottom: '1.5rem', lineHeight: 1.6 }}>
-                            Did you sell this position or do you just want to remove it?
+                            {t('modal.removeQuestion')}
                         </p>
                         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
                             <button
@@ -83,7 +85,7 @@ export default function SellDeleteModal({
                                 }}
                                 onClick={() => setStep('sell_details')}
                             >
-                                Sold
+                                {t('modal.sold')}
                             </button>
                             <button
                                 type="button"
@@ -101,7 +103,7 @@ export default function SellDeleteModal({
                                 }}
                                 onClick={onConfirmDelete}
                             >
-                                Just Delete
+                                {t('modal.justDelete')}
                             </button>
                         </div>
                         <div style={{ textAlign: 'right', paddingTop: '0.5rem' }}>
@@ -117,7 +119,7 @@ export default function SellDeleteModal({
                                 }}
                                 onClick={onClose}
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                         </div>
                     </div>
@@ -126,12 +128,12 @@ export default function SellDeleteModal({
                 {step === 'sell_details' && (
                     <form className="modalBody" onSubmit={handleSoldSubmit}>
                         <p style={{ marginBottom: '1.5rem', lineHeight: 1.6, color: 'var(--muted)' }}>
-                            Enter the sale details to update your cash balance.
+                            {t('modal.sellDetails')}
                         </p>
 
                         <div className="field" style={{ marginBottom: '1rem' }}>
                             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-                                Selling Price
+                                {t('modal.sellingPrice')}
                             </label>
                             <input
                                 ref={firstInputRef}
@@ -146,7 +148,7 @@ export default function SellDeleteModal({
 
                         <div className="field" style={{ marginBottom: '1.5rem' }}>
                             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
-                                Amount Sold
+                                {t('modal.amountSold')}
                             </label>
                             <input
                                 value={amountStr}
@@ -167,7 +169,7 @@ export default function SellDeleteModal({
                             borderRadius: '10px',
                             border: '1px solid var(--border)',
                         }}>
-                            <span style={{ fontWeight: 600 }}>Total Proceeds:</span>
+                            <span style={{ fontWeight: 600 }}>{t('modal.totalProceeds')}</span>
                             <span style={{
                                 fontWeight: 700,
                                 fontSize: '1.1rem',
@@ -191,7 +193,7 @@ export default function SellDeleteModal({
                                 }}
                                 onClick={() => setStep('choice')}
                             >
-                                Back
+                                {t('common.back')}
                             </button>
                             <button
                                 type="submit"
@@ -206,7 +208,7 @@ export default function SellDeleteModal({
                                     color: '#fff',
                                 }}
                             >
-                                Confirm Sale
+                                {t('modal.confirmSale')}
                             </button>
                         </div>
                     </form>

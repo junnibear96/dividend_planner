@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { listSymbols, type SymbolListItem } from '../features/symbols/symbolsApi'
 
 function toInt(raw: string | null, fallback: number) {
@@ -8,6 +9,7 @@ function toInt(raw: string | null, fallback: number) {
 }
 
 export default function SymbolsPage() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const q = String(searchParams.get('q') ?? '')
@@ -27,22 +29,22 @@ export default function SymbolsPage() {
     let cancelled = false
     const controller = new AbortController()
 
-    ;(async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-        const res = await listSymbols({ exchange, q, limit, offset, signal: controller.signal })
-        if (!cancelled) {
-          setItems(Array.isArray(res.items) ? res.items : [])
-          setHasMore(Boolean(res.hasMore))
-          setTotal(Number.isFinite(res.total) ? res.total : 0)
+      ; (async () => {
+        try {
+          setIsLoading(true)
+          setError(null)
+          const res = await listSymbols({ exchange, q, limit, offset, signal: controller.signal })
+          if (!cancelled) {
+            setItems(Array.isArray(res.items) ? res.items : [])
+            setHasMore(Boolean(res.hasMore))
+            setTotal(Number.isFinite(res.total) ? res.total : 0)
+          }
+        } catch (err) {
+          if (!cancelled) setError(err instanceof Error ? err.message : t('symbols.errors.loadFailed'))
+        } finally {
+          if (!cancelled) setIsLoading(false)
         }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load symbols')
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
+      })()
 
     return () => {
       cancelled = true
@@ -114,15 +116,15 @@ export default function SymbolsPage() {
       <div className="actionsRow" style={{ alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
         <div className="hint">
           {total > 0 ? (
-            <>Showing {start}–{end} of {total}</>
+            <>{t('symbols.pager.showing', { start, end, total })}</>
           ) : (
-            <>Showing {offset + 1}–{offset + items.length}</>
+            <>{t('symbols.pager.showing', { start: offset + 1, end: offset + items.length, total })}</>
           )}
         </div>
 
         <div className="actionsRow" style={{ justifyContent: 'flex-end', flexWrap: 'wrap' }} aria-label="Pagination">
           <button type="button" className="navTab" onClick={prevPage} disabled={offset === 0}>
-            Prev
+            {t('common.prev')}
           </button>
 
           {pageItems.map((it) => {
@@ -151,7 +153,7 @@ export default function SymbolsPage() {
           })}
 
           <button type="button" className="navTab" onClick={nextPage} disabled={!hasMore}>
-            Next
+            {t('common.next')}
           </button>
         </div>
       </div>
@@ -162,23 +164,23 @@ export default function SymbolsPage() {
     <div className="page">
       <div className="pageInner">
         <div className="panel" style={{ marginBottom: '1rem' }}>
-          <h2 style={{ marginTop: 0 }}>All stocks (EODHD)</h2>
+          <h2 style={{ marginTop: 0 }}>{t('symbols.title')}</h2>
           <p className="hint" style={{ marginTop: 0 }}>
-            Browse the cached EODHD symbol list (exchange: {exchange}).
+            {t('symbols.subtitle', { exchange })}
           </p>
 
           <div className="actionsRow" style={{ alignItems: 'end' }}>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span className="hint">Search (symbol or name)</span>
+              <span className="hint">{t('symbols.searchLabel')}</span>
               <input
                 value={q}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="AAPL, TSLA, SPY, Tesla…"
+                placeholder={t('symbols.searchPlaceholder')}
               />
             </label>
             <div style={{ flex: 1 }} />
             <Link className="tab" to={{ pathname: '/stock', search: '' }}>
-              Back to Stock
+              {t('symbols.backToStock')}
             </Link>
           </div>
         </div>
@@ -190,9 +192,9 @@ export default function SymbolsPage() {
         ) : null}
 
         {isLoading ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('common.loading')}</p>
         ) : items.length === 0 ? (
-          <p className="empty">No symbols found.</p>
+          <p className="empty">{t('symbols.noSymbols')}</p>
         ) : (
           <div className="panel">
             <div style={{ marginBottom: '0.5rem' }}>
@@ -203,10 +205,10 @@ export default function SymbolsPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Currency</th>
+                    <th>{t('symbols.table.symbol')}</th>
+                    <th>{t('symbols.table.name')}</th>
+                    <th>{t('symbols.table.type')}</th>
+                    <th>{t('symbols.table.currency')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -228,7 +230,7 @@ export default function SymbolsPage() {
 
             <div style={{ marginTop: '0.75rem' }}>
               <Pager />
-              <div className="hint" style={{ marginTop: '0.5rem' }}>Query: {nextParamsBase.q || '—'}</div>
+              <div className="hint" style={{ marginTop: '0.5rem' }}>{t('symbols.query', { query: nextParamsBase.q || '—' })}</div>
             </div>
           </div>
         )}

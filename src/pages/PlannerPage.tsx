@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth'
 import { searchStockSymbols } from '../features/stock/stockApi'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
@@ -21,6 +22,7 @@ async function jsonOrNull(res: Response) {
 }
 
 export default function PlannerPage() {
+  const { t } = useTranslation()
   const { user, setUser } = useAuth()
   const navigate = useNavigate()
 
@@ -73,11 +75,11 @@ export default function PlannerPage() {
     const res = await fetch('/api/holdings')
     if (!res.ok) {
       const body = (await jsonOrNull(res)) as { error?: string } | null
-      throw new Error(body?.error ?? `Failed to load holdings (${res.status})`)
+      throw new Error(body?.error ?? `${t('planner.errors.loadFailed')} (${res.status})`)
     }
     const data = (await res.json()) as { holdings: PlannerHolding[] | undefined }
     return Array.isArray(data.holdings) ? data.holdings : []
-  }, [userId])
+  }, [userId, t])
 
   const [isReinvestOpen, setIsReinvestOpen] = useState(false)
   const [reinvestWeek, setReinvestWeek] = useState<WeekIndex>(1)
@@ -91,10 +93,10 @@ export default function PlannerPage() {
     })
     if (!res.ok) {
       const body = (await jsonOrNull(res)) as { error?: string } | null
-      throw new Error(body?.error ?? `Failed to save holding (${res.status})`)
+      throw new Error(body?.error ?? `${t('planner.errors.saveFailed')} (${res.status})`)
     }
     const data = (await res.json()) as { holding: PlannerHolding | undefined }
-    if (!data.holding) throw new Error('Server did not return created holding')
+    if (!data.holding) throw new Error(t('planner.errors.saveFailed'))
     return data.holding
   }
 
@@ -109,10 +111,10 @@ export default function PlannerPage() {
     })
     if (!res.ok) {
       const body = (await jsonOrNull(res)) as { error?: string } | null
-      throw new Error(body?.error ?? `Failed to update holding (${res.status})`)
+      throw new Error(body?.error ?? `${t('planner.errors.updateFailed')} (${res.status})`)
     }
     const data = (await res.json()) as { holding: PlannerHolding | undefined }
-    if (!data.holding) throw new Error('Server did not return updated holding')
+    if (!data.holding) throw new Error(t('planner.errors.updateFailed'))
     return data.holding
   }
 
@@ -120,7 +122,7 @@ export default function PlannerPage() {
     const res = await fetch(`/api/holdings/${encodeURIComponent(id)}`, { method: 'DELETE' })
     if (!res.ok && res.status !== 204) {
       const body = (await jsonOrNull(res)) as { error?: string } | null
-      throw new Error(body?.error ?? `Failed to delete holding (${res.status})`)
+      throw new Error(body?.error ?? `${t('planner.errors.deleteFailed')} (${res.status})`)
     }
   }
 
@@ -129,18 +131,18 @@ export default function PlannerPage() {
       <div className="pageInner">
         <header className="header">
           <div>
-            <h1>Dividend Planner</h1>
-            <p className="subtitle">Plan and estimate dividend income.</p>
+            <h1>{t('planner.title')}</h1>
+            <p className="subtitle">{t('planner.subtitle')}</p>
           </div>
 
           <div className="headerRight">
             {user ? (
               <div className="summary" aria-label="Reinvestment">
                 <button type="button" onClick={() => setIsReinvestOpen(true)}>
-                  Reinvest
+                  {t('planner.reinvest')}
                 </button>
                 <button type="button" className="linkButton" onClick={() => navigate('/reinvest')}>
-                  Open page
+                  {t('planner.openPage')}
                 </button>
               </div>
             ) : null}
@@ -150,21 +152,21 @@ export default function PlannerPage() {
                 value={stockSearch}
                 onValueChange={setStockSearch}
                 suggestions={stockSearchSuggestions}
-                placeholder="Search symbol (e.g., TSLY.US)"
+                placeholder={t('planner.searchPlaceholder')}
               />
               <button type="submit" disabled={!stockSearch.trim()}>
-                Search
+                {t('planner.search')}
               </button>
             </form>
 
             <div className="userBox">
               <div className="userMeta">
                 <div>
-                  <div className="userLabel">Signed in</div>
+                  <div className="userLabel">{t('auth.signedIn')}</div>
                   <div className="userEmail">{user?.email}</div>
                 </div>
                 <button type="button" onClick={logout}>
-                  Log out
+                  {t('auth.logout')}
                 </button>
               </div>
             </div>
@@ -191,7 +193,7 @@ export default function PlannerPage() {
           >
             <div className="modalDialog modalWide modalScrollable" role="dialog" aria-modal="true" aria-label="Reinvest">
               <div className="modalHeader">
-                <div className="modalTitle">Reinvest</div>
+                <div className="modalTitle">{t('planner.reinvest')}</div>
                 <div className="actionsRow">
                   <button
                     type="button"
@@ -201,10 +203,10 @@ export default function PlannerPage() {
                       navigate('/reinvest')
                     }}
                   >
-                    Open page
+                    {t('planner.openPage')}
                   </button>
                   <button type="button" className="modalClose" onClick={() => setIsReinvestOpen(false)}>
-                    Close
+                    {t('planner.holdingModal.close')}
                   </button>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { PlannerHolding } from '../../planner/DividendPlanner'
 import { fetchReinvestmentHistory, fetchReinvestmentSummary, type ReinvestmentExecution, type ReinvestmentRule } from '../reinvestmentApi'
 import ReinvestmentTimeline from './ReinvestmentTimeline'
@@ -141,6 +142,7 @@ function weeklyEquivalentDividendPerShare(h: PlannerHolding): number {
 
 export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekIndex } = {}) {
   const { focusWeekIndex } = props
+  const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -161,7 +163,7 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
       })
       .catch((err: unknown) => {
         if (!alive) return
-        setError(err instanceof Error ? err.message : 'Failed to load timeline data')
+        setError(err instanceof Error ? err.message : t('timeline.errors.loadFailed'))
       })
       .finally(() => {
         if (!alive) return
@@ -329,19 +331,19 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
 
   if (isLoading) {
     return (
-      <section className="panel" aria-label="Dividend reinvestment timeline">
-        <h2>Summary</h2>
-        <p className="empty">Loading…</p>
+      <section className="panel" aria-label={t('timeline.ariaLabel')}>
+        <h2>{t('timeline.summary.title')}</h2>
+        <p className="empty">{t('common.loading')}</p>
       </section>
     )
   }
 
   if (error || !rule) {
     return (
-      <section className="panel" aria-label="Dividend reinvestment timeline">
-        <h2>Summary</h2>
+      <section className="panel" aria-label={t('timeline.ariaLabel')}>
+        <h2>{t('timeline.summary.title')}</h2>
         <p className="error" role="alert" aria-live="polite">
-          {error ?? 'Missing reinvestment rule'}
+          {error ?? t('timeline.errors.missingRule')}
         </p>
       </section>
     )

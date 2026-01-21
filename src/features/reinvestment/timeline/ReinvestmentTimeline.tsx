@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import MonthYearHeader, { type MonthYear } from './MonthYearHeader'
 import { monthLabel, type MonthNumber } from './dateUtils'
 import { buildMonthlyTimeline } from './buildMonthlyTimeline'
@@ -63,6 +64,7 @@ export default function ReinvestmentTimeline(props: {
     focusWeekIndex,
   } = props
 
+  const { t, i18n } = useTranslation()
   const [selected, setSelected] = useState<MonthYear>({ month: props.initialMonth, year: props.initialYear })
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false)
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false)
@@ -98,10 +100,13 @@ export default function ReinvestmentTimeline(props: {
   const weeksGridClassName = visibleWeeks.length <= 1 ? 'timelineWeeks timelineWeeksSingle' : 'timelineWeeks'
 
   return (
-    <section className="panel" aria-label="Dividend reinvestment timeline">
-      <h2>Summary</h2>
+    <section className="panel" aria-label={t('timeline.ariaLabel')}>
+      <h2>{t('timeline.summary.title')}</h2>
       <p className="subtitle">
-        {monthLabel(selected.month)} {selected.year} — weekly slices with compounding across months.
+        {t('timeline.summary.subtitle', {
+          month: new Date(Date.UTC(selected.year, selected.month - 1, 1)).toLocaleString(i18n.language, { month: 'long', timeZone: 'UTC' }),
+          year: selected.year
+        })}
       </p>
 
       <MonthYearHeader
@@ -123,7 +128,7 @@ export default function ReinvestmentTimeline(props: {
         }}
       />
 
-      <div className={weeksGridClassName} aria-label="Weeks">
+      <div className={weeksGridClassName} aria-label={t('timeline.header.months')}>
         {visibleWeeks.map((w) => {
           const cardClass =
             w.status === 'CURRENT'
@@ -135,42 +140,42 @@ export default function ReinvestmentTimeline(props: {
           const nextDelta = w.nextWeekDividendEstimate - w.dividendEarned
 
           return (
-            <div key={`${selected.year}-${selected.month}-w${w.weekIndex}`} className={cardClass} aria-label={`Week ${w.weekIndex}`}>
+            <div key={`${selected.year}-${selected.month}-w${w.weekIndex}`} className={cardClass} aria-label={t('timeline.week', { week: w.weekIndex })}>
               <div className="timelineWeekTopRow">
-                <div className="timelineWeekTitle">Week {w.weekIndex}</div>
+                <div className="timelineWeekTitle">{t('timeline.week', { week: w.weekIndex })}</div>
                 <div className="timelineWeekDates">
-                  {monthLabel(selected.month)} {formatDateRange(w.startDate, w.endDate)}
+                  {new Date(Date.UTC(selected.year, selected.month - 1, 1)).toLocaleString(i18n.language, { month: 'long', timeZone: 'UTC' })} {formatDateRange(w.startDate, w.endDate)}
                 </div>
               </div>
 
               <div className="timelineWeekBody">
                 <div className="timelineMetric">
-                  <div className="timelineMetricLabel">Dividend earned</div>
+                  <div className="timelineMetricLabel">{t('timeline.metric.dividendEarned')}</div>
                   <div className="timelineMetricValue">{formatMoney(w.dividendEarned)}</div>
                 </div>
 
                 <div className="timelineMetric">
-                  <div className="timelineMetricLabel">Reinvested amount</div>
+                  <div className="timelineMetricLabel">{t('timeline.metric.reinvested')}</div>
                   <div className="timelineMetricValue">{formatMoney(w.reinvestedAmount)}</div>
                 </div>
 
                 <div className="timelineMetric">
-                  <div className="timelineMetricLabel">Assets purchased</div>
+                  <div className="timelineMetricLabel">{t('timeline.metric.assetsPurchased')}</div>
                   <div className="timelineMetricValue timelineMono">{sharesDeltaLabel(w.sharesAdded)}</div>
                 </div>
 
                 <div className="timelineMetric">
-                  <div className="timelineMetricLabel">Shares added</div>
+                  <div className="timelineMetricLabel">{t('timeline.metric.sharesAdded')}</div>
                   <div className="timelineMetricValue">{totalShares(w.sharesAdded).toFixed(6)}</div>
                 </div>
 
                 <div className="timelineMetric">
-                  <div className="timelineMetricLabel">Total shares after</div>
+                  <div className="timelineMetricLabel">{t('timeline.metric.totalShares')}</div>
                   <div className="timelineMetricValue">{totalShares(w.endingShares).toFixed(6)}</div>
                 </div>
 
                 <div className="timelineMetric">
-                  <div className="timelineMetricLabel">Next-week dividend change</div>
+                  <div className="timelineMetricLabel">{t('timeline.metric.nextDividendChange')}</div>
                   <div className="timelineMetricValue">
                     {Number.isFinite(nextDelta) ? (nextDelta >= 0 ? `+${formatMoney(nextDelta)}` : formatMoney(nextDelta)) : '—'}
                   </div>

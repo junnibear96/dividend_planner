@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
 import {
   addToWatchlist,
@@ -19,6 +20,8 @@ function formatPercent(value: number): string {
 }
 
 export default function WatchlistPage() {
+
+  const { t } = useTranslation()
   const [items, setItems] = useState<WatchlistItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -125,8 +128,8 @@ export default function WatchlistPage() {
         <div className="panel">
           <div className="portfolioHeader">
             <div className="stack" style={{ gap: '0.25rem' }}>
-              <h2 style={{ margin: 0 }}>Watchlist</h2>
-              <div className="summaryKey">EODHD (cached) quotes + fundamentals</div>
+              <h2 style={{ margin: 0 }}>{t('watchlist.title')}</h2>
+              <div className="summaryKey">{t('watchlist.subtitle')}</div>
             </div>
 
             <div className="portfolioHeaderRight">
@@ -135,13 +138,13 @@ export default function WatchlistPage() {
                   value={symbolDraft}
                   onValueChange={setSymbolDraft}
                   suggestions={suggestions}
-                  placeholder="Add symbol (e.g. TSLY or TSLY.US)"
+                  placeholder={t('watchlist.searchPlaceholder')}
                   disabled={isSaving || isRefreshing}
                 />
               </form>
 
               <div className="summaryCard">
-                <div className="summaryKey">Items</div>
+                <div className="summaryKey">{t('watchlist.items')}</div>
                 <div className="summaryValue">{items.length}</div>
               </div>
 
@@ -151,7 +154,7 @@ export default function WatchlistPage() {
                 onClick={onRefresh}
                 disabled={isRefreshing}
               >
-                {isRefreshing ? 'Refreshing…' : 'Refresh'}
+                {isRefreshing ? t('watchlist.refreshing') : t('watchlist.refresh')}
               </button>
 
               <button
@@ -163,7 +166,7 @@ export default function WatchlistPage() {
                 }}
                 disabled={!canAdd || isSaving || isRefreshing}
               >
-                {isSaving ? 'Adding…' : 'Add'}
+                {isSaving ? t('watchlist.adding') : t('watchlist.add')}
               </button>
             </div>
           </div>
@@ -173,18 +176,18 @@ export default function WatchlistPage() {
 
           {!isLoading ? (
             items.length === 0 ? (
-              <p className="empty">No watchlist items yet.</p>
+              <p className="empty">{t('watchlist.empty')}</p>
             ) : (
               <div className="tableWrap">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Symbol</th>
-                      <th>Name</th>
-                      <th className="num">Price</th>
-                      <th className="num">Change</th>
-                      <th className="num">Change %</th>
-                      <th className="num">Actions</th>
+                      <th>{t('watchlist.table.symbol')}</th>
+                      <th>{t('watchlist.table.name')}</th>
+                      <th className="num">{t('watchlist.table.price')}</th>
+                      <th className="num">{t('watchlist.table.change')}</th>
+                      <th className="num">{t('watchlist.table.changePercent')}</th>
+                      <th className="num">{t('watchlist.table.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -221,7 +224,7 @@ export default function WatchlistPage() {
                               className="linkButton"
                               onClick={() => void onRemove(it.symbol)}
                             >
-                              Remove
+                              {t('watchlist.table.remove')}
                             </button>
                           </td>
                         </tr>

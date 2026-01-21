@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { searchStockSymbols } from '../stock/stockApi'
 import SymbolAutocompleteInput from '../stock/SymbolAutocompleteInput'
 import { type DividendFrequency } from '../../utils/dividends'
@@ -67,6 +68,7 @@ export default function DividendPlanner({
   updateHolding,
   deleteHolding,
 }: Props) {
+  const { t } = useTranslation()
   const [holdings, setHoldings] = useState<PlannerHolding[]>(() => initialHoldings ?? [])
 
   const [symbol, setSymbol] = useState('')
@@ -89,10 +91,10 @@ export default function DividendPlanner({
   const parsedDividendPerShare = toPositiveNumber(dividendPerShare)
   const canSubmit = Boolean(
     canWrite &&
-      !isSaving &&
-      cleanedSymbol &&
-      parsedShares !== null &&
-      parsedDividendPerShare !== null,
+    !isSaving &&
+    cleanedSymbol &&
+    parsedShares !== null &&
+    parsedDividendPerShare !== null,
   )
 
   const weeklyHoldings = useMemo(
@@ -151,10 +153,10 @@ export default function DividendPlanner({
   const parsedEditDividendPerShare = toPositiveNumber(editDividendPerShare)
   const canSaveEdit = Boolean(
     canWrite &&
-      editHolding &&
-      !isEditSaving &&
-      parsedEditShares !== null &&
-      parsedEditDividendPerShare !== null,
+    editHolding &&
+    !isEditSaving &&
+    parsedEditShares !== null &&
+    parsedEditDividendPerShare !== null,
   )
 
   useEffect(() => {
@@ -169,7 +171,7 @@ export default function DividendPlanner({
         if (!cancelled) setHoldings(Array.isArray(next) ? next : [])
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load holdings')
+          setError(err instanceof Error ? err.message : t('planner.errors.loadFailed'))
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -231,26 +233,26 @@ export default function DividendPlanner({
     e.preventDefault()
 
     if (!canWrite) {
-      setError(mode === 'user' ? 'Please log in to add holdings.' : 'Cannot add holdings.')
+      setError(mode === 'user' ? t('planner.errors.loginToAdd') : t('planner.errors.cannotAdd'))
       return
     }
     if (!cleanedSymbol) {
-      setError('Symbol is required.')
+      setError(t('planner.errors.symbolRequired'))
       return
     }
     if (parsedShares === null) {
-      setError('Shares must be a positive number.')
+      setError(t('planner.errors.sharesPositive'))
       return
     }
     if (parsedDividendPerShare === null) {
-      setError('Dividend/share must be a positive number.')
+      setError(t('planner.errors.dividendPositive'))
       return
     }
 
     const sharesValue = parsedShares
     const dividendPerShareValue = parsedDividendPerShare
     if (sharesValue === null || dividendPerShareValue === null) {
-      setError('Invalid number input.')
+      setError(t('planner.errors.invalidNumber'))
       return
     }
 
@@ -272,7 +274,7 @@ export default function DividendPlanner({
         setDividendPerShare('')
         setDividendFrequency('yearly')
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save holding')
+        setError(err instanceof Error ? err.message : t('planner.errors.saveFailed'))
       } finally {
         setIsSaving(false)
       }
@@ -284,7 +286,7 @@ export default function DividendPlanner({
   function removeHolding(id: string) {
     async function remove() {
       if (!canWrite) {
-        setError(mode === 'user' ? 'Please log in to remove holdings.' : 'Cannot remove holdings.')
+        setError(mode === 'user' ? t('planner.errors.loginToRemove') : t('planner.errors.cannotRemove'))
         return
       }
 
@@ -299,7 +301,7 @@ export default function DividendPlanner({
         await deleteHolding(id)
       } catch (err) {
         if (previousHoldings) setHoldings(previousHoldings)
-        setError(err instanceof Error ? err.message : 'Failed to delete holding')
+        setError(err instanceof Error ? err.message : t('planner.errors.deleteFailed'))
       }
     }
 
@@ -308,7 +310,7 @@ export default function DividendPlanner({
 
   async function toggleIncludeInReinvestment(holding: PlannerHolding, next: boolean) {
     if (!canWrite) {
-      setError(mode === 'user' ? 'Please log in to edit holdings.' : 'Cannot edit holdings.')
+      setError(mode === 'user' ? t('planner.errors.loginToEdit') : t('planner.errors.cannotEdit'))
       return
     }
 
@@ -324,7 +326,7 @@ export default function DividendPlanner({
       setHoldings((prev) => prev.map((h) => (h.id === updated.id ? updated : h)))
     } catch (err) {
       if (previousHoldings) setHoldings(previousHoldings)
-      setError(err instanceof Error ? err.message : 'Failed to update holding')
+      setError(err instanceof Error ? err.message : t('planner.errors.updateFailed'))
     }
   }
 
@@ -332,16 +334,16 @@ export default function DividendPlanner({
     e.preventDefault()
 
     if (!canWrite) {
-      setError(mode === 'user' ? 'Please log in to edit holdings.' : 'Cannot edit holdings.')
+      setError(mode === 'user' ? t('planner.errors.loginToEdit') : t('planner.errors.cannotEdit'))
       return
     }
     if (!editHolding) return
     if (parsedEditShares === null) {
-      setError('Shares must be a positive number.')
+      setError(t('planner.errors.sharesPositive'))
       return
     }
     if (parsedEditDividendPerShare === null) {
-      setError('Dividend/share must be a positive number.')
+      setError(t('planner.errors.dividendPositive'))
       return
     }
 
@@ -349,7 +351,7 @@ export default function DividendPlanner({
     const sharesValue = parsedEditShares
     const dividendPerShareValue = parsedEditDividendPerShare
     if (sharesValue === null || dividendPerShareValue === null) {
-      setError('Invalid number input.')
+      setError(t('planner.errors.invalidNumber'))
       return
     }
 
@@ -365,7 +367,7 @@ export default function DividendPlanner({
         setHoldings((prev) => prev.map((h) => (h.id === updated.id ? updated : h)))
         closeEdit()
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to update holding')
+        setError(err instanceof Error ? err.message : t('planner.errors.updateFailed'))
       } finally {
         setIsEditSaving(false)
       }
@@ -383,22 +385,22 @@ export default function DividendPlanner({
           onMouseDown={onEditOverlayMouseDown}
           onKeyDown={onEditKeyDown}
         >
-          <div className="modalDialog" role="dialog" aria-modal="true" aria-label="Edit holding">
+          <div className="modalDialog" role="dialog" aria-modal="true" aria-label={t('planner.holdingModal.title')}>
             <div className="modalHeader">
-              <div className="modalTitle">Edit holding ({editHolding.symbol})</div>
+              <div className="modalTitle">{t('planner.holdingModal.title')} ({editHolding.symbol})</div>
               <button
                 type="button"
                 className="modalClose"
                 onClick={closeEdit}
                 disabled={isEditSaving}
               >
-                Close
+                {t('planner.holdingModal.close')}
               </button>
             </div>
 
             <form className="form" onSubmit={onSaveEdit}>
               <label className="field">
-                <span>Shares</span>
+                <span>{t('planner.holdingModal.shares')}</span>
                 <input
                   type="number"
                   min={0}
@@ -411,7 +413,7 @@ export default function DividendPlanner({
                 />
               </label>
               <label className="field">
-                <span>Dividend / share (USD)</span>
+                <span>{t('planner.holdingModal.dividendPerShare')}</span>
                 <input
                   type="number"
                   min={0}
@@ -424,7 +426,7 @@ export default function DividendPlanner({
               </label>
               <div className="actions">
                 <button type="submit" disabled={!canSaveEdit}>
-                  Save changes
+                  {t('planner.holdingModal.saveChanges')}
                 </button>
               </div>
             </form>
@@ -433,37 +435,37 @@ export default function DividendPlanner({
       ) : null}
 
       {showSummary ? (
-        <div className="summary" aria-label="Estimated totals">
+        <div className="summary" aria-label={t('planner.summary.title')}>
           <div className="summaryCard">
-            <div className="summaryKey">Yearly</div>
+            <div className="summaryKey">{t('planner.summary.yearly')}</div>
             <div className="summaryValue">{formatMoney(totals.yearly)}</div>
           </div>
           <div className="summaryCard">
-            <div className="summaryKey">Monthly</div>
+            <div className="summaryKey">{t('planner.summary.monthly')}</div>
             <div className="summaryValue">{formatMoney(totals.monthly)}</div>
           </div>
           <div className="summaryCard">
-            <div className="summaryKey">Weekly</div>
+            <div className="summaryKey">{t('planner.summary.weekly')}</div>
             <div className="summaryValue">{formatMoney(totals.weekly)}</div>
           </div>
         </div>
       ) : null}
 
       <section className="panel">
-        <h2>Add holding</h2>
+        <h2>{t('planner.add.title')}</h2>
         <form className="form" onSubmit={onAddHolding}>
           <label className="field">
-            <span>Symbol</span>
+            <span>{t('planner.add.symbolLabel')}</span>
             <SymbolAutocompleteInput
               value={symbol}
               onValueChange={setSymbol}
               suggestions={symbolSuggestions}
-              placeholder="AAPL"
+              placeholder={t('planner.add.symbolPlaceholder')}
               disabled={!canWrite && mode === 'user'}
             />
           </label>
           <label className="field">
-            <span>Shares</span>
+            <span>{t('planner.add.sharesLabel')}</span>
             <input
               type="number"
               min={0}
@@ -471,22 +473,22 @@ export default function DividendPlanner({
               value={shares}
               onChange={(e) => setShares(e.target.value)}
               inputMode="decimal"
-              placeholder="10"
+              placeholder={t('planner.add.sharesPlaceholder')}
               disabled={!canWrite && mode === 'user'}
             />
           </label>
           <label className="field">
             <div className="fieldLabelRow">
-              <span>Dividend / share (USD)</span>
+              <span>{t('planner.add.dividendLabel')}</span>
               <select
                 value={dividendFrequency}
                 onChange={(e) => setDividendFrequency(e.target.value as DividendFrequency)}
                 aria-label="Dividend frequency"
                 disabled={!canWrite && mode === 'user'}
               >
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
+                <option value="weekly">{t('planner.add.frequency.weekly')}</option>
+                <option value="monthly">{t('planner.add.frequency.monthly')}</option>
+                <option value="yearly">{t('planner.add.frequency.yearly')}</option>
               </select>
             </div>
             <input
@@ -496,13 +498,13 @@ export default function DividendPlanner({
               value={dividendPerShare}
               onChange={(e) => setDividendPerShare(e.target.value)}
               inputMode="decimal"
-              placeholder="1.00"
+              placeholder={t('planner.add.dividendPlaceholder')}
               disabled={!canWrite && mode === 'user'}
             />
           </label>
           <div className="actions">
             <button type="submit" disabled={!canSubmit}>
-              Add holding
+              {t('planner.add.submit')}
             </button>
           </div>
         </form>
@@ -512,30 +514,30 @@ export default function DividendPlanner({
             {error}
           </p>
         ) : (
-          <p className="hint">Tip: enter dividend per share for the selected frequency in USD.</p>
+          <p className="hint">{t('planner.add.tip')}</p>
         )}
       </section>
 
       <section className="panel">
-        <h2>Weekly dividend income</h2>
+        <h2>{t('planner.sections.weeklyTitle')}</h2>
         {isLoading ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('planner.table.loading')}</p>
         ) : weeklyHoldings.length === 0 ? (
-          <p className="empty">No weekly dividend holdings.</p>
+          <p className="empty">{t('planner.table.emptyWeekly')}</p>
         ) : (
           <>
             <p className="hint">
-              Reinvest candidates: {reinvestCandidates.weekly.length ? reinvestCandidates.weekly.join(', ') : '—'}
+              {t('planner.table.reinvestCandidates')}: {reinvestCandidates.weekly.length ? reinvestCandidates.weekly.join(', ') : '—'}
             </p>
             <div className="tableWrap">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th className="num">Shares</th>
-                    <th className="num">Dividend / share</th>
-                    <th className="num">Weekly income</th>
-                    <th className="num">Include in reinvestment</th>
+                    <th>{t('planner.table.symbol')}</th>
+                    <th className="num">{t('planner.table.shares')}</th>
+                    <th className="num">{t('planner.table.dividendPerShare')}</th>
+                    <th className="num">{t('planner.table.income')}</th>
+                    <th className="num">{t('planner.table.includeInReinvestment')}</th>
                     <th />
                   </tr>
                 </thead>
@@ -562,7 +564,7 @@ export default function DividendPlanner({
                           onClick={() => openEdit(h)}
                           disabled={!canWrite}
                         >
-                          Edit
+                          {t('planner.table.edit')}
                         </button>
                         <span aria-hidden="true">&nbsp;&nbsp;</span>
                         <button
@@ -571,7 +573,7 @@ export default function DividendPlanner({
                           onClick={() => removeHolding(h.id)}
                           disabled={!canWrite}
                         >
-                          Remove
+                          {t('planner.table.remove')}
                         </button>
                       </td>
                     </tr>
@@ -580,7 +582,7 @@ export default function DividendPlanner({
                 <tfoot>
                   <tr>
                     <td colSpan={3} className="totalsLabel">
-                      Total (weekly holdings)
+                      {t('planner.table.totalLabel')}
                     </td>
                     <td className="num totalsValue">{formatMoney(frequencyTotals.weekly)}</td>
                     <td />
@@ -594,25 +596,25 @@ export default function DividendPlanner({
       </section>
 
       <section className="panel">
-        <h2>Monthly dividend income</h2>
+        <h2>{t('planner.sections.monthlyTitle')}</h2>
         {isLoading ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('planner.table.loading')}</p>
         ) : monthlyHoldings.length === 0 ? (
-          <p className="empty">No monthly dividend holdings.</p>
+          <p className="empty">{t('planner.table.emptyMonthly')}</p>
         ) : (
           <>
             <p className="hint">
-              Reinvest candidates: {reinvestCandidates.monthly.length ? reinvestCandidates.monthly.join(', ') : '—'}
+              {t('planner.table.reinvestCandidates')}: {reinvestCandidates.monthly.length ? reinvestCandidates.monthly.join(', ') : '—'}
             </p>
             <div className="tableWrap">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th className="num">Shares</th>
-                    <th className="num">Dividend / share</th>
-                    <th className="num">Monthly income</th>
-                    <th className="num">Include in reinvestment</th>
+                    <th>{t('planner.table.symbol')}</th>
+                    <th className="num">{t('planner.table.shares')}</th>
+                    <th className="num">{t('planner.table.dividendPerShare')}</th>
+                    <th className="num">{t('planner.table.income')}</th>
+                    <th className="num">{t('planner.table.includeInReinvestment')}</th>
                     <th />
                   </tr>
                 </thead>
@@ -639,7 +641,7 @@ export default function DividendPlanner({
                           onClick={() => openEdit(h)}
                           disabled={!canWrite}
                         >
-                          Edit
+                          {t('planner.table.edit')}
                         </button>
                         <span aria-hidden="true">&nbsp;&nbsp;</span>
                         <button
@@ -648,7 +650,7 @@ export default function DividendPlanner({
                           onClick={() => removeHolding(h.id)}
                           disabled={!canWrite}
                         >
-                          Remove
+                          {t('planner.table.remove')}
                         </button>
                       </td>
                     </tr>
@@ -657,7 +659,7 @@ export default function DividendPlanner({
                 <tfoot>
                   <tr>
                     <td colSpan={3} className="totalsLabel">
-                      Total (monthly holdings)
+                      {t('planner.table.totalLabel')}
                     </td>
                     <td className="num totalsValue">{formatMoney(frequencyTotals.monthly)}</td>
                     <td />
@@ -671,25 +673,25 @@ export default function DividendPlanner({
       </section>
 
       <section className="panel">
-        <h2>Yearly dividend income</h2>
+        <h2>{t('planner.sections.yearlyTitle')}</h2>
         {isLoading ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('planner.table.loading')}</p>
         ) : yearlyHoldings.length === 0 ? (
-          <p className="empty">No yearly dividend holdings.</p>
+          <p className="empty">{t('planner.table.emptyYearly')}</p>
         ) : (
           <>
             <p className="hint">
-              Reinvest candidates: {reinvestCandidates.yearly.length ? reinvestCandidates.yearly.join(', ') : '—'}
+              {t('planner.table.reinvestCandidates')}: {reinvestCandidates.yearly.length ? reinvestCandidates.yearly.join(', ') : '—'}
             </p>
             <div className="tableWrap">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th className="num">Shares</th>
-                    <th className="num">Dividend / share</th>
-                    <th className="num">Yearly income</th>
-                    <th className="num">Include in reinvestment</th>
+                    <th>{t('planner.table.symbol')}</th>
+                    <th className="num">{t('planner.table.shares')}</th>
+                    <th className="num">{t('planner.table.dividendPerShare')}</th>
+                    <th className="num">{t('planner.table.income')}</th>
+                    <th className="num">{t('planner.table.includeInReinvestment')}</th>
                     <th />
                   </tr>
                 </thead>
@@ -716,7 +718,7 @@ export default function DividendPlanner({
                           onClick={() => openEdit(h)}
                           disabled={!canWrite}
                         >
-                          Edit
+                          {t('planner.table.edit')}
                         </button>
                         <span aria-hidden="true">&nbsp;&nbsp;</span>
                         <button
@@ -725,7 +727,7 @@ export default function DividendPlanner({
                           onClick={() => removeHolding(h.id)}
                           disabled={!canWrite}
                         >
-                          Remove
+                          {t('planner.table.remove')}
                         </button>
                       </td>
                     </tr>
@@ -734,7 +736,7 @@ export default function DividendPlanner({
                 <tfoot>
                   <tr>
                     <td colSpan={3} className="totalsLabel">
-                      Total (yearly holdings)
+                      {t('planner.table.totalLabel')}
                     </td>
                     <td className="num totalsValue">{formatMoney(frequencyTotals.yearly)}</td>
                     <td />
@@ -748,20 +750,20 @@ export default function DividendPlanner({
       </section>
 
       <section className="panel">
-        <h2>Total dividend (annualized estimate)</h2>
+        <h2>{t('planner.sections.totalTitle')}</h2>
         {isLoading ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('planner.table.loading')}</p>
         ) : holdings.length === 0 ? (
-          <p className="empty">No holdings yet.</p>
+          <p className="empty">{t('planner.table.empty')}</p>
         ) : (
           <div className="tableWrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th className="num">Weekly total</th>
-                  <th className="num">Monthly total</th>
-                  <th className="num">Yearly total</th>
-                  <th className="num">Total</th>
+                  <th className="num">{t('planner.annualizedTable.weeklyTotal')}</th>
+                  <th className="num">{t('planner.annualizedTable.monthlyTotal')}</th>
+                  <th className="num">{t('planner.annualizedTable.yearlyTotal')}</th>
+                  <th className="num">{t('planner.annualizedTable.total')}</th>
                 </tr>
               </thead>
               <tbody>

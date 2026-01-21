@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 type Props = {
   value: string
@@ -19,6 +20,7 @@ export default function SymbolAutocompleteInput({
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [isFocused, setIsFocused] = useState(false)
+  const { t } = useTranslation()
 
   const items = useMemo(() => {
     const seen = new Set<string>()
@@ -70,7 +72,7 @@ export default function SymbolAutocompleteInput({
       />
 
       {show ? (
-        <div className="autocompleteList" role="listbox" aria-label="Symbol suggestions">
+        <div className="autocompleteList" role="listbox" aria-label={t('common.symbolSuggestions')}>
           {items.map((s) => (
             <button
               key={s}

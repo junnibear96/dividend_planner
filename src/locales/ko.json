@@ -1,0 +1,376 @@
+{
+    "nav": {
+        "home": "홈",
+        "stock": "주식",
+        "symbols": "심볼",
+        "watchlist": "관심종목",
+        "planner": "플래너",
+        "reinvest": "재투자",
+        "logout": "로그아웃",
+        "login": "로그인"
+    },
+    "watchlist": {
+        "title": "관심종목",
+        "subtitle": "EODHD (캐싱됨) 시세 + 기초자산",
+        "items": "항목",
+        "searchPlaceholder": "심볼 추가 (예: TSLY 또는 TSLY.US)",
+        "refreshing": "새로고침 중…",
+        "refresh": "새로고침",
+        "adding": "추가 중…",
+        "add": "추가",
+        "empty": "아직 관심종목이 없습니다.",
+        "table": {
+            "symbol": "심볼",
+            "name": "종목명",
+            "price": "현재가",
+            "change": "등락",
+            "changePercent": "등락률",
+            "actions": "관리",
+            "remove": "삭제"
+        }
+    },
+    "stock": {
+        "searchPlaceholder": "주식, ETF 등 검색",
+        "search": "검색",
+        "watchlist": {
+            "title": "관심 목록",
+            "manage": "관리",
+            "loginPrompt": "로그인하여 관심종목을 확인하세요.",
+            "loginLink": "로그인 하러 가기",
+            "error": "관심종목을 불러오지 못했습니다",
+            "loading": "로딩 중…",
+            "empty": "아직 관심종목이 없습니다."
+        },
+        "quickLinks": {
+            "title": "바로가기",
+            "openWatchlist": "관심종목 열기",
+            "openPortfolio": "포트폴리오 열기"
+        },
+        "error": {
+            "title": "데이터 오류",
+            "hint": "API 서버에 `EODHD_API_TOKEN`이 설정되어 있는지, 그리고 서버에서 EODHD에 접근 가능한지 확인해주세요 (DB 캐싱 연결도 확인 필요)."
+        },
+        "stats": {
+            "title": "통계",
+            "previousClose": "전일 종가",
+            "dailyRange": "일일 변동폭",
+            "range52w": "52주 변동폭",
+            "avgVolume": "평균 거래량 (30일)"
+        },
+        "dividends": {
+            "title": "배당금",
+            "annualSum": "연간 배당금 (최근 12개월)",
+            "yield": "배당 수익률",
+            "loading": "로딩 중…",
+            "empty": "배당 내역이 없습니다.",
+            "table": {
+                "date": "날짜",
+                "dividend": "배당금"
+            }
+        }
+    },
+    "auth": {
+        "signedIn": "로그인 됨",
+        "logout": "로그아웃",
+        "account": "계정",
+        "login": "로그인",
+        "register": "회원가입",
+        "email": "이메일",
+        "emailPlaceholder": "you@example.com",
+        "password": "비밀번호",
+        "passwordPlaceholderLogin": "비밀번호 입력",
+        "passwordPlaceholderRegister": "8자 이상 입력",
+        "createAccount": "계정 생성",
+        "requestFailed": "요청 실패",
+        "signInTitle": "로그인",
+        "toApp": "Dividend Planner"
+    },
+    "landing": {
+        "appTitle": "Dividend Planner",
+        "subtitle": "배당 수익을 계획하고 예상해보세요.",
+        "searchPlaceholder": "심볼 검색 (예: TSLY.US)",
+        "search": "검색"
+    },
+    "portfolio": {
+        "summary": {
+            "title": "보유 현금",
+            "edit": "편집",
+            "save": "저장",
+            "saving": "저장 중…",
+            "cancel": "취소",
+            "invalidAmount": "잘못된 금액입니다",
+            "failedToSave": "저장 실패"
+        },
+        "home": {
+            "title": "홈",
+            "subtitle": "오늘의 포트폴리오 요약",
+            "searchPlaceholder": "심볼 검색 (예: TSLY.US)",
+            "search": "검색",
+            "totalValue": "총 자산",
+            "profit": "수익금",
+            "problem": "문제 발생",
+            "addTitle": "종목 추가",
+            "symbolLabel": "심볼",
+            "amountLabel": "수량",
+            "buyPriceLabel": "매수 단가 (선택)",
+            "buyPricePlaceholder": "예: 37.50",
+            "amountPlaceholder": "예: 10",
+            "symbolPlaceholder": "예: TSLY.US",
+            "add": "추가",
+            "portfolioTitle": "보유 종목",
+            "loading": "로딩 중…",
+            "empty": "보유 중인 종목이 없습니다.",
+            "remove": "삭제"
+        },
+        "table": {
+            "symbol": "심볼",
+            "price": "현재가",
+            "change": "등락",
+            "buyPrice": "단가",
+            "amount": "수량",
+            "value": "평가액",
+            "profit": "손익",
+            "actions": "관리"
+        }
+    },
+    "planner": {
+        "title": "배당 플래너",
+        "subtitle": "수입을 계획하세요. (게스트 모드: 로컬 전용)",
+        "reinvest": "재투자",
+        "openPage": "플래너 열기",
+        "searchPlaceholder": "검색 (예: AAPL)",
+        "search": "검색",
+        "errors": {
+            "loginToAdd": "보유 종목을 추가하려면 로그인하세요.",
+            "cannotAdd": "보유 종목을 추가할 수 없습니다.",
+            "symbolRequired": "종목 심볼이 필요합니다.",
+            "sharesPositive": "수량은 양수여야 합니다.",
+            "dividendPositive": "주당 배당금은 양수여야 합니다.",
+            "invalidNumber": "잘못된 숫자 입력입니다.",
+            "saveFailed": "보유 종목 저장 실패",
+            "loginToRemove": "보유 종목을 제거하려면 로그인하세요.",
+            "cannotRemove": "보유 종목을 제거할 수 없습니다.",
+            "deleteFailed": "보유 종목 삭제 실패",
+            "loginToEdit": "보유 종목을 수정하려면 로그인하세요.",
+            "cannotEdit": "보유 종목을 수정할 수 없습니다.",
+            "updateFailed": "보유 종목 업데이트 실패",
+            "loadFailed": "보유 종목 로드 실패"
+        },
+        "holdingModal": {
+            "title": "보유 종목 수정",
+            "close": "닫기",
+            "shares": "수량",
+            "dividendPerShare": "주당 배당금 (USD)",
+            "saveChanges": "변경사항 저장"
+        },
+        "summary": {
+            "title": "예상 총계",
+            "yearly": "연간",
+            "monthly": "월간",
+            "weekly": "주간"
+        },
+        "add": {
+            "title": "보유 종목 추가",
+            "symbolLabel": "종목 심볼",
+            "symbolPlaceholder": "AAPL",
+            "sharesLabel": "수량",
+            "sharesPlaceholder": "10",
+            "dividendLabel": "주당 배당금 (USD)",
+            "dividendPlaceholder": "1.00",
+            "frequency": {
+                "weekly": "매주",
+                "monthly": "매월",
+                "yearly": "매년"
+            },
+            "submit": "추가",
+            "tip": "팁: 선택한 주기에 해당하는 주당 배당금을 USD로 입력하세요."
+        },
+        "sections": {
+            "weeklyTitle": "주간 배당 수입",
+            "monthlyTitle": "월간 배당 수입",
+            "yearlyTitle": "연간 배당 수입",
+            "totalTitle": "총 배당금 (연환산 추정치)"
+        },
+        "table": {
+            "loading": "로딩 중…",
+            "empty": "보유 중인 종목이 없습니다.",
+            "emptyWeekly": "주간 배당 종목이 없습니다.",
+            "emptyMonthly": "월간 배당 종목이 없습니다.",
+            "emptyYearly": "연간 배당 종목이 없습니다.",
+            "reinvestCandidates": "재투자 후보",
+            "symbol": "심볼",
+            "shares": "수량",
+            "dividendPerShare": "주당 배당금",
+            "income": "수입",
+            "includeInReinvestment": "재투자 포함",
+            "edit": "수정",
+            "remove": "삭제",
+            "totalLabel": "합계"
+        },
+        "annualizedTable": {
+            "weeklyTotal": "주간 합계",
+            "monthlyTotal": "월간 합계",
+            "yearlyTotal": "연간 합계",
+            "total": "총계"
+        }
+    },
+    "common": {
+        "loading": "로딩 중…",
+        "close": "닫기",
+        "cancel": "취소",
+        "back": "뒤로",
+        "prev": "이전",
+        "next": "다음",
+        "symbolSuggestions": "종목 추천",
+        "backToPlanner": "플래너로 돌아가기",
+        "refresh": "새로고침",
+        "reset": "초기화",
+        "save": "저장",
+        "addAsset": "자산 추가",
+        "remove": "삭제",
+        "errors": {
+            "positiveNumbers": "유효한 양수를 입력해주세요."
+        }
+    },
+    "symbols": {
+        "title": "전체 주식 (EODHD)",
+        "subtitle": "캐시된 EODHD 종목 목록을 탐색합니다 (거래소: {{exchange}}).",
+        "searchLabel": "검색 (종목 코드 또는 이름)",
+        "searchPlaceholder": "AAPL, TSLA, SPY, Tesla…",
+        "backToStock": "주식 화면으로",
+        "noSymbols": "종목을 찾을 수 없습니다.",
+        "query": "검색어: {{query}}",
+        "pager": {
+            "showing": "{{total}}개 중 {{start}}–{{end}} 표시"
+        },
+        "table": {
+            "symbol": "심볼",
+            "name": "이름",
+            "type": "유형",
+            "currency": "통화"
+        },
+        "errors": {
+            "loadFailed": "종목 목록 로드 실패"
+        }
+    },
+    "modal": {
+        "removeTitle": "{{symbol}} 삭제",
+        "removeQuestion": "이 포지션을 매도했나요, 아니면 단순히 목록에서 제거할까요?",
+        "sold": "매도됨",
+        "justDelete": "단순 삭제",
+        "sellDetails": "현금 잔액을 업데이트하려면 매도 상세 정보를 입력하세요.",
+        "sellingPrice": "매도 가격",
+        "amountSold": "매도 수량",
+        "totalProceeds": "총 매도 금액:",
+        "confirmSale": "매도 확정"
+    },
+    "chart": {
+        "title": "가격 추이 ({{range}})",
+        "close": "종가",
+        "dailyChange": "일일 변동",
+        "rangeSelector": "기간 선택",
+        "selectSymbol": "차트를 보려면 종목을 선택하세요.",
+        "noHistory": "기록이 없습니다.",
+        "ariaLabel": "과거 가격 차트",
+        "loadFailed": "차트 로드 실패"
+    },
+    "reinvestment": {
+        "title": "재투자",
+        "subtitle": "1–4주차 재투자 규칙을 계획하고 내역을 검토하세요.",
+        "week": "{{week}}주차",
+        "weeks": "주차 선택",
+        "summary": {
+            "cashAvailable": "사용 가능 배당금",
+            "nextScheduled": "다음 재투자 예정일"
+        },
+        "settings": {
+            "title": "재투자 설정",
+            "scheduleMode": "일정 모드",
+            "weekMode": "1–4주차 (각각 다른 목적지 설정)",
+            "fixedMode": "고정 일정",
+            "schedule": "일정",
+            "source": "재원(Source)",
+            "destination": "투자처(Destination)",
+            "weekSuffix": " ({{week}}주차)",
+            "weekCascade": "{{editWeek}}주차 수정 시 {{range}}에 적용됩니다.",
+            "destinationSymbol": "투자할 심볼",
+            "destinationBasket": "배분 바스켓",
+            "minAmount": "최소 금액 (USD)",
+            "fractional": "소수점 단위 주식(Fractional Shares) 허용",
+            "resetTitle": "설정 초기화",
+            "confirmReset": "마지막 저장된 설정으로 되돌리시겠습니까?",
+            "frequency": {
+                "weekly": "매주",
+                "biweekly": "격주",
+                "monthly": "매월"
+            },
+            "sourceTypes": {
+                "all": "모든 보유 종목",
+                "selected": "선택된 종목 (테이블의 체크박스)"
+            },
+            "destinationTypes": {
+                "same": "재원과 동일 (Same as source)",
+                "single": "단일 종목 (Single asset)",
+                "basket": "배분 바스켓 (Allocation basket)"
+            }
+        },
+        "history": {
+            "title": "재투자 내역",
+            "date": "일시",
+            "week": "주차",
+            "amount": "금액",
+            "from": "재원",
+            "to": "투자처",
+            "shares": "수량",
+            "price": "가격",
+            "empty": "재투자 내역이 없습니다."
+        },
+        "table": {
+            "symbol": "심볼",
+            "weight": "비중"
+        },
+        "errors": {
+            "weekError": "{{week}}주차: {{error}}",
+            "destinationSymbolRequired": "투자할 심볼이 필요합니다.",
+            "basketEmpty": "바스켓에 최소 1개 이상의 자산이 있어야 합니다.",
+            "basketSymbolEmpty": "바스켓에 심볼이 없는 항목이 있습니다.",
+            "basketWeightPositive": "바스켓 비중은 0보다 커야 합니다.",
+            "basketTotalPositive": "바스켓 총 비중은 0보다 커야 합니다.",
+            "fixWeekSettings": "저장하기 전에 1–4주차 설정을 확인하세요. ({{count}}개 문제)",
+            "fixSettings": "저장하기 전에 설정을 확인하세요. ({{count}}개 문제)",
+            "loadSummaryFailed": "요약 정보를 불러오지 못했습니다",
+            "loadHistoryFailed": "내역을 불러오지 못했습니다",
+            "updateFailed": "설정 업데이트 실패"
+        }
+    },
+    "timeline": {
+        "summary": {
+            "title": "요약",
+            "subtitle": "{{year}}년 {{month}} — 월별 복리 효과가 포함된 주간 슬라이스."
+        },
+        "week": "{{week}}주차",
+        "metric": {
+            "dividendEarned": "배당 수익",
+            "reinvested": "재투자 금액",
+            "assetsPurchased": "매수 자산",
+            "sharesAdded": "추가된 주식 수",
+            "totalShares": "최종 보유 수량",
+            "nextDividendChange": "다음 주 배당 변화"
+        },
+        "ariaLabel": "배당 재투자 타임라인",
+        "errors": {
+            "loadFailed": "타임라인 데이터를 불러오지 못했습니다",
+            "missingRule": "재투자 규칙이 없습니다"
+        },
+        "header": {
+            "monthYearNavigation": "월/연도 탐색",
+            "prevMonth": "이전 달",
+            "nextMonth": "다음 달",
+            "selectMonth": "월 선택",
+            "selectYear": "연도 선택",
+            "months": "월",
+            "years": "연도",
+            "selectedMonthYear": "선택된 월/연도"
+        }
+    }
+}

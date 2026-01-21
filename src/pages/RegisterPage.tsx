@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import UserAuth from '../UserAuth'
 import { useAuth } from '../auth'
 import DividendPlanner, {
@@ -14,6 +15,7 @@ function createId() {
 }
 
 export default function RegisterPage() {
+  const { t } = useTranslation()
   const { user, isAuthLoading, setUser } = useAuth()
   const navigate = useNavigate()
   const [stockSearch, setStockSearch] = useState('')
@@ -38,18 +40,18 @@ export default function RegisterPage() {
       <div className="pageInner">
         <div className="loginGrid">
           <div className="loginHero">
-            <h1>Dividend Planner</h1>
-            <p className="subtitle">Plan and estimate dividend income.</p>
+            <h1>{t('landing.appTitle')}</h1>
+            <p className="subtitle">{t('landing.subtitle')}</p>
 
             <form className="stockSearch" onSubmit={onStockSearch} role="search">
               <input
                 value={stockSearch}
                 onChange={(e) => setStockSearch(e.target.value)}
-                placeholder="Search symbol (e.g., TSLY.US)"
+                placeholder={t('landing.searchPlaceholder')}
                 autoComplete="off"
               />
               <button type="submit" disabled={!stockSearch.trim()}>
-                Search
+                {t('landing.search')}
               </button>
             </form>
           </div>

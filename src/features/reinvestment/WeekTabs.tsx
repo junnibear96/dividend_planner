@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 export type WeekIndex = 1 | 2 | 3 | 4
 
 export default function WeekTabs(props: {
@@ -5,10 +7,11 @@ export default function WeekTabs(props: {
   onChange: (v: WeekIndex) => void
   disabled?: boolean
 }) {
+  const { t } = useTranslation()
   const { value, onChange, disabled } = props
 
   return (
-    <div className="weekTabs" role="tablist" aria-label="Weeks">
+    <div className="weekTabs" role="tablist" aria-label={t('reinvestment.weeks')}>
       {([1, 2, 3, 4] as const).map((w) => (
         <button
           key={w}
@@ -19,7 +22,7 @@ export default function WeekTabs(props: {
           onClick={() => onChange(w)}
           disabled={disabled}
         >
-          Week {w}
+          {t('reinvestment.week', { week: w })}
         </button>
       ))}
     </div>

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { MONTH_NAMES_SHORT, addMonths, monthLabel, type MonthNumber } from './dateUtils'
+import { useTranslation } from 'react-i18next'
+import { addMonths, type MonthNumber } from './dateUtils'
 
 export type MonthYear = {
   month: MonthNumber
@@ -25,19 +26,26 @@ export default function MonthYearHeader(props: {
     onClosePickers,
   } = props
 
+  const { t, i18n } = useTranslation()
+
   const years = useMemo(() => {
     // Deterministic 12-year grid centered around the selected year.
     const start = value.year - 6
     return Array.from({ length: 12 }, (_, i) => start + i)
   }, [value.year])
 
+  const monthNamesShort = useMemo(() => {
+    const dt = new Intl.DateTimeFormat(i18n.language, { month: 'short', timeZone: 'UTC' })
+    return Array.from({ length: 12 }, (_, i) => dt.format(new Date(Date.UTC(2000, i, 1))))
+  }, [i18n.language])
+
   return (
     <div className="timelineHeader">
-      <div className="timelineHeaderRow" aria-label="Month and year navigation">
+      <div className="timelineHeaderRow" aria-label={t('timeline.header.monthYearNavigation')}>
         <button
           type="button"
           className="timelineNavButton"
-          aria-label="Previous month"
+          aria-label={t('timeline.header.prevMonth')}
           onClick={() => {
             const next = addMonths(value.year, value.month, -1)
             onClosePickers()
@@ -47,7 +55,7 @@ export default function MonthYearHeader(props: {
           {'<'}
         </button>
 
-        <div className="timelineHeaderTitle" aria-label="Selected month and year">
+        <div className="timelineHeaderTitle" aria-label={t('timeline.header.selectedMonthYear')}>
           <button
             type="button"
             className={isMonthPickerOpen ? 'timelinePickButton timelinePickButtonActive' : 'timelinePickButton'}
@@ -55,7 +63,7 @@ export default function MonthYearHeader(props: {
             aria-expanded={isMonthPickerOpen}
             onClick={onToggleMonthPicker}
           >
-            {monthLabel(value.month)}
+            {new Date(Date.UTC(value.year, value.month - 1, 1)).toLocaleString(i18n.language, { month: 'long', timeZone: 'UTC' })}
           </button>
           <span className="timelineHeaderSpacer" aria-hidden="true">
             {' '}
@@ -74,7 +82,7 @@ export default function MonthYearHeader(props: {
         <button
           type="button"
           className="timelineNavButton"
-          aria-label="Next month"
+          aria-label={t('timeline.header.nextMonth')}
           onClick={() => {
             const next = addMonths(value.year, value.month, 1)
             onClosePickers()
@@ -86,9 +94,9 @@ export default function MonthYearHeader(props: {
       </div>
 
       {isMonthPickerOpen ? (
-        <div className="timelinePicker" aria-label="Select month">
-          <div className="timelinePickerGrid" role="grid" aria-label="Months">
-            {MONTH_NAMES_SHORT.map((label, idx) => {
+        <div className="timelinePicker" aria-label={t('timeline.header.selectMonth')}>
+          <div className="timelinePickerGrid" role="grid" aria-label={t('timeline.header.months')}>
+            {monthNamesShort.map((label, idx) => {
               const month = (idx + 1) as MonthNumber
               const selected = month === value.month
               return (
@@ -112,8 +120,8 @@ export default function MonthYearHeader(props: {
       ) : null}
 
       {isYearPickerOpen ? (
-        <div className="timelinePicker" aria-label="Select year">
-          <div className="timelinePickerGrid" role="grid" aria-label="Years">
+        <div className="timelinePicker" aria-label={t('timeline.header.selectYear')}>
+          <div className="timelinePickerGrid" role="grid" aria-label={t('timeline.header.years')}>
             {years.map((y) => {
               const selected = y === value.year
               return (

@@ -90,10 +90,11 @@ async function updateRealTimeData(pool: mysql.Pool) {
                 await new Promise(r => setTimeout(r, DELAY_MS))
 
             } catch (err: unknown) {
-                // Handle 402 specifically to avoid spamming logs, but keep others visible
+                // Handle 402 specifically
                 const msg = err instanceof Error ? err.message : String(err)
                 if (msg.includes('402')) {
-                    console.warn(`[Scheduler] 402 Payment Required for chunk ${i}-${i + CHUNK_SIZE}. Skipped (rate limit or plan limit).`)
+                    console.warn(`[Scheduler] 402 Payment Required for chunk ${i}-${i + CHUNK_SIZE}. Aborting remaining updates for this cycle.`)
+                    break // Stop processing
                 } else {
                     console.error(`[Scheduler] Error fetching chunk ${i}-${i + CHUNK_SIZE}:`, err)
                 }

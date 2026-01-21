@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { getCashBalance, getCashBalanceCache, updateCashBalance } from '../features/portfolio/portfolioApi'
 
 function formatMoney(value: number): string {
@@ -15,6 +16,7 @@ type PortfolioSummaryProps = {
 }
 
 export default function PortfolioSummary({ value, onSave }: PortfolioSummaryProps = {}) {
+    const { t } = useTranslation()
     const isControlled = value !== undefined
     const [internalCash, setInternalCash] = useState<number | null>(() => getCashBalanceCache())
 
@@ -72,7 +74,7 @@ export default function PortfolioSummary({ value, onSave }: PortfolioSummaryProp
         setError(null)
         const next = parseFloat(editValue)
         if (isNaN(next) || next < 0) {
-            setError('Invalid amount')
+            setError(t('portfolio.summary.invalidAmount'))
             return
         }
 
@@ -86,7 +88,7 @@ export default function PortfolioSummary({ value, onSave }: PortfolioSummaryProp
             }
             setIsEditing(false)
         } catch (err) {
-            setError('Failed to save')
+            setError(t('portfolio.summary.failedToSave'))
         } finally {
             setIsSaving(false)
         }
@@ -95,10 +97,10 @@ export default function PortfolioSummary({ value, onSave }: PortfolioSummaryProp
     return (
         <section className="panel" style={{ marginBottom: '2rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h2 style={{ margin: 0 }}>Available Cash</h2>
+                <h2 style={{ margin: 0 }}>{t('portfolio.summary.title')}</h2>
                 {!isEditing && (
                     <button type="button" className="linkButton" onClick={startEditing} style={{ fontSize: '0.9rem' }}>
-                        Edit
+                        {t('portfolio.summary.edit')}
                     </button>
                 )}
             </div>
@@ -115,10 +117,10 @@ export default function PortfolioSummary({ value, onSave }: PortfolioSummaryProp
                             placeholder="0.00"
                         />
                         <button type="button" onClick={() => void save()} disabled={isSaving} className="tableButton">
-                            Save
+                            {t('portfolio.summary.save')}
                         </button>
                         <button type="button" onClick={cancelEditing} disabled={isSaving} className="tableButton" style={{ background: 'transparent', border: '1px solid var(--border)' }}>
-                            Cancel
+                            {t('portfolio.summary.cancel')}
                         </button>
                     </div>
                 ) : (

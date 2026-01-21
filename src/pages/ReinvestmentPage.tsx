@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth'
 import ReinvestmentPanel from '../features/reinvestment/ReinvestmentPanel'
 import WeekTabs, { type WeekIndex } from '../features/reinvestment/WeekTabs'
@@ -8,6 +9,7 @@ import ReinvestmentTimelineLive from '../features/reinvestment/timeline/Reinvest
 
 export default function ReinvestmentPage() {
   const { user, setUser } = useAuth()
+  const { t } = useTranslation()
   const navigate = useNavigate()
 
   const [activeWeek, setActiveWeek] = useState<WeekIndex>(1)
@@ -24,23 +26,23 @@ export default function ReinvestmentPage() {
       <div className="pageInner">
         <header className="header">
           <div>
-            <h1>Reinvestment</h1>
-            <p className="subtitle">Plan Week 1–4 reinvestment rules and review history.</p>
+            <h1>{t('reinvestment.title')}</h1>
+            <p className="subtitle">{t('reinvestment.subtitle')}</p>
           </div>
 
           <div className="headerRight">
             <div className="userBox">
               <div className="userMeta">
                 <div>
-                  <div className="userLabel">Signed in</div>
+                  <div className="userLabel">{t('auth.signedIn')}</div>
                   <div className="userEmail">{user?.email}</div>
                 </div>
                 <div className="actionsRow">
                   <button type="button" onClick={() => navigate('/planner')}>
-                    Back to Planner
+                    {t('common.backToPlanner')}
                   </button>
                   <button type="button" onClick={logout}>
-                    Log out
+                    {t('auth.logout')}
                   </button>
                 </div>
               </div>
