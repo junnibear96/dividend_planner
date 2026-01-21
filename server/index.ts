@@ -12,6 +12,7 @@ import {
   processPortfolioForReinvestment,
   updateReinvestmentRule,
 } from './reinvestment'
+import { startScheduler } from './scheduler'
 
 // Always load the repo-root `.env` (even if the server is started from `server/`).
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -1607,6 +1608,37 @@ app.patch('/api/portfolio/:id', async (req, res) => {
   }
 })
 
+app.delete('/api/portfolio/:id', async (req, res) => {
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const id = String(req.params.id)
+    if (!id) {
+      res.status(400).json({ error: 'Missing id' })
+      return
+    }
+
+    const [result] = await pool.execute<mysql.ResultSetHeader>(
+      'DELETE FROM portfolio_positions WHERE id = :id AND user_id = :userId',
+      { id, userId: user.id },
+    )
+
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: 'Position not found' })
+      return
+    }
+
+    res.status(204).end()
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
 app.post('/api/holdings', async (req, res) => {
   try {
     await ensureSchema()
@@ -1697,11 +1729,11 @@ app.post('/api/holdings', async (req, res) => {
     res.status(201).json({
       holding: holding
         ? {
-            ...holding,
-            includeInReinvestment: Boolean(
-              (holding as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
-            ),
-          }
+          ...holding,
+          includeInReinvestment: Boolean(
+            (holding as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
+          ),
+        }
         : undefined,
     })
   } catch (err) {
@@ -1792,11 +1824,11 @@ app.patch('/api/holdings/:id', async (req, res) => {
     res.json({
       holding: holding
         ? {
-            ...holding,
-            includeInReinvestment: Boolean(
-              (holding as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
-            ),
-          }
+          ...holding,
+          includeInReinvestment: Boolean(
+            (holding as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
+          ),
+        }
         : undefined,
     })
   } catch (err) {
@@ -2456,4 +2488,5 @@ app.post('/api/watchlist/refresh', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`)
+  startScheduler(pool)
 })

@@ -18,8 +18,4 @@ export function ProtectedRoute() {
   return <Outlet />
 }
 
-export function HomeRedirect() {
-  const { user, isAuthLoading } = useAuth()
-  if (isAuthLoading) return null
-  return <Navigate to={user ? '/home' : '/login'} replace />
-}
+

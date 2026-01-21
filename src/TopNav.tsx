@@ -25,7 +25,7 @@ export default function TopNav() {
   return (
     <header className="topNav" role="banner">
       <div className="topNavInner">
-        <Link to="/" className="homeButton" aria-label="Home">
+        <Link to={user ? "/home" : "/"} className="homeButton" aria-label="Home">
           홈
         </Link>
 

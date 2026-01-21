@@ -6,6 +6,8 @@ import {
   createPortfolioPosition,
   listPortfolio,
   updatePortfolioPosition,
+  deletePortfolioPosition,
+  getPortfolioCache,
   type PortfolioPosition,
 } from '../features/portfolio/portfolioApi'
 
@@ -105,7 +107,7 @@ export default function HomePage() {
   const [stockSearch, setStockSearch] = useState('')
   const [stockSearchSuggestions, setStockSearchSuggestions] = useState<string[]>([])
 
-  const [positions, setPositions] = useState<PortfolioPosition[]>([])
+  const [positions, setPositions] = useState<PortfolioPosition[]>(() => getPortfolioCache() ?? [])
   const [quotesBySymbol, setQuotesBySymbol] = useState<Record<string, QuoteView | undefined>>({})
 
   const [isLoading, setIsLoading] = useState(true)
@@ -348,6 +350,19 @@ export default function HomePage() {
     }
   }
 
+  async function removePosition(id: string) {
+    if (!confirm('Are you sure you want to remove this position?')) return
+
+    try {
+      setRowSavingId(id)
+      await deletePortfolioPosition(id)
+      setPositions((prev) => prev.filter((p) => p.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete position')
+      setRowSavingId(null)
+    }
+  }
+
   return (
     <div className="page">
       <div className="pageInner">
@@ -382,7 +397,7 @@ export default function HomePage() {
               >
                 {typeof totals.profit === 'number' && typeof totals.profitPercent === 'number' ? (
                   <span>
-                    Profit {formatSigned(totals.profit, 2)} ({formatPercent(totals.profitPercent)})
+                    Profit ${formatSigned(totals.profit, 2)} ({formatPercent(totals.profitPercent)})
                   </span>
                 ) : (
                   <span>Profit —</span>
@@ -543,14 +558,25 @@ export default function HomePage() {
                             : '—'}
                         </td>
                         <td className="num">
-                          <button
-                            type="button"
-                            className="tableButton"
-                            onClick={() => void saveRowAmount(p.id)}
-                            disabled={isRowSaving}
-                          >
-                            {isRowSaving ? 'Saving…' : 'Save'}
-                          </button>
+                          <div className="actionsRow" style={{ justifyContent: 'flex-end', gap: '0.5rem' }}>
+                            <button
+                              type="button"
+                              className="tableButton"
+                              onClick={() => void saveRowAmount(p.id)}
+                              disabled={isRowSaving}
+                            >
+                              {isRowSaving ? 'Saving…' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              className="tableButton"
+                              onClick={() => void removePosition(p.id)}
+                              disabled={isRowSaving}
+                              style={{ background: 'color-mix(in oklab, var(--danger) 15%, transparent)', color: 'var(--danger)' }}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -564,3 +590,4 @@ export default function HomePage() {
     </div>
   )
 }
+

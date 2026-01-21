@@ -157,30 +157,115 @@
   min-width: 0;
 }
 
-.loginGrid {
+.landingGrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.25rem;
+  gap: 3rem;
   grid-template-areas:
     'hero'
-    'planner'
-    'auth';
-  gap: 1.25rem;
+    'planner';
   align-items: start;
 }
 
-.loginLeft {
-  display: grid;
-  gap: 1rem;
-  justify-items: center;
-  grid-area: auth;
+.landingHero {
+  padding-top: 2rem;
+  grid-area: hero;
+  text-align: center;
+  position: relative;
 }
 
-.loginRight {
-  display: grid;
-  gap: 1rem;
+.landingPlanner {
   grid-area: planner;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
+
+.loginPageCentered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--bg) 95%, var(--accent)) 0%, var(--bg) 100%);
+  padding: 1rem;
+}
+
+.loginCardSimplified {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 2.5rem;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.loginTitle {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+.loginSubtitle {
+  margin: -1.25rem 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.loginCardSimplified .userBox {
+  border: none;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.loginCardSimplified .userForm {
+  gap: 1rem;
+}
+
+.loginCardSimplified input {
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--surface) 60%, transparent);
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.loginCardSimplified input:focus {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+}
+
+.loginCardSimplified button[type='submit'] {
+  width: 100%;
+  justify-content: center;
+  padding: 0.8rem;
+  font-size: 1.05rem;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.loginCardSimplified button[type='submit']:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.loginCardSimplified button[type='submit']:disabled {
+  opacity: 0.5;
+  transform: none;
+}
+
 
 .loginHero {
   padding-top: 2rem;
@@ -445,8 +530,8 @@
   gap: 0.75rem;
 }
 
-.modalDialog .field > input,
-.modalDialog .field > select {
+.modalDialog .field>input,
+.modalDialog .field>select {
   width: 100%;
 }
 
@@ -522,17 +607,27 @@
 }
 
 @media (min-width: 900px) {
-  .loginGrid {
+  .landingGrid {
     grid-template-columns: 1fr 420px;
     grid-template-areas:
       'hero hero'
-      'planner auth';
+      'planner planner';
+    /* Adjusted to just fill since auth is gone from landing */
   }
 
-  .loginLeft {
-    justify-items: stretch;
+  /* Actually, maybe we want planner to be centered or side-by-side with something? 
+     The original had planner and auth side-by-side. 
+     If we only have hero + planner now, maybe just stack them or center planner?
+     Let's keep it simple: Hero on top, Planner below.
+  */
+  .landingGrid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'hero'
+      'planner';
   }
 }
+
 
 .app {
   display: flex;
@@ -583,7 +678,7 @@
     max-width: 12rem;
   }
 
-  .userMeta > button {
+  .userMeta>button {
     padding: 0.55rem 0.85rem;
   }
 
@@ -613,7 +708,7 @@
   flex: 1;
 }
 
-.autocomplete > input {
+.autocomplete>input {
   width: 100%;
 }
 
@@ -796,7 +891,7 @@
   margin-bottom: 0.75rem;
 }
 
-.divSummary > div {
+.divSummary>div {
   border: 1px solid var(--border);
   background: color-mix(in oklab, var(--surface) 82%, transparent);
   border-radius: 14px;
@@ -1051,7 +1146,7 @@
   font-size: 1.1rem;
 }
 
-.field > span {
+.field>span {
   font-size: 0.9rem;
   opacity: 0.9;
 }
@@ -1277,7 +1372,7 @@
     margin-top: 0.35rem;
   }
 
-  .userMeta > button {
+  .userMeta>button {
     align-self: stretch;
   }
 
