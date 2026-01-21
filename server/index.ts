@@ -1608,6 +1608,53 @@ app.patch('/api/portfolio/:id', async (req, res) => {
   }
 })
 
+app.get('/api/portfolio/cash', async (req, res) => {
+  try {
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const [rows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT cash_balance FROM portfolio_summary WHERE user_id = :userId',
+      { userId: user.id },
+    )
+
+    const balance = rows.length > 0 ? Number(rows[0].cash_balance) : 0
+    res.json({ cashBalance: balance })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.put('/api/portfolio/cash', async (req, res) => {
+  try {
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const { amount } = req.body
+    if (typeof amount !== 'number' || isNaN(amount)) {
+      res.status(400).json({ error: 'Invalid amount' })
+      return
+    }
+
+    await pool.execute(
+      `INSERT INTO portfolio_summary (user_id, cash_balance)
+       VALUES (:userId, :amount)
+       ON DUPLICATE KEY UPDATE cash_balance = VALUES(cash_balance)`,
+      { userId: user.id, amount },
+    )
+
+    res.json({ cashBalance: amount })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
 app.delete('/api/portfolio/:id', async (req, res) => {
   try {
     await ensureSchema()

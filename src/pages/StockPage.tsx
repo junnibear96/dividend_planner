@@ -12,6 +12,7 @@ import { parseYyyyMmDd } from '../features/stock/eodhd'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
 import { getStockCached, searchStockSymbols } from '../features/stock/stockApi'
 import { useAuth } from '../auth'
+import PriceChart from '../features/stock/PriceChart'
 import { listWatchlist, type WatchlistItem } from '../features/watchlist/watchlistApi'
 
 type PricePoint = {
@@ -184,19 +185,19 @@ export default function StockPage() {
     }
 
     let cancelled = false
-    ;(async () => {
-      try {
-        setWatchlistLoading(true)
-        setWatchlistError(null)
-        const items = await listWatchlist()
-        if (!cancelled) setWatchlistItems(items)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to load watchlist'
-        if (!cancelled) setWatchlistError(msg)
-      } finally {
-        if (!cancelled) setWatchlistLoading(false)
-      }
-    })()
+      ; (async () => {
+        try {
+          setWatchlistLoading(true)
+          setWatchlistError(null)
+          const items = await listWatchlist()
+          if (!cancelled) setWatchlistItems(items)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Failed to load watchlist'
+          if (!cancelled) setWatchlistError(msg)
+        } finally {
+          if (!cancelled) setWatchlistLoading(false)
+        }
+      })()
 
     return () => {
       cancelled = true
@@ -448,43 +449,9 @@ export default function StockPage() {
               </section>
             ) : null}
 
-            <section className="panel">
-              <h2>Price history (1M)</h2>
-              {isLoading ? (
-                <p className="empty">Loading…</p>
-              ) : eod.length === 0 ? (
-                <p className="empty">No history available.</p>
-              ) : (
-                <div className="chartWrap" aria-label="Price history chart">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={eod} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="date" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
-                      <YAxis
-                        tick={{ fontSize: 12 }}
-                        width={56}
-                        domain={['auto', 'auto']}
-                        tickFormatter={(v: string | number) =>
-                          typeof v === 'number' ? v.toFixed(2) : String(v)
-                        }
-                      />
-                      <Tooltip
-                        formatter={(value: string | number | undefined) =>
-                          typeof value === 'number' ? formatMoney2(value) : String(value ?? '')
-                        }
-                        labelFormatter={(label: string | number) => String(label)}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="close"
-                        dot={false}
-                        stroke="var(--accent)"
-                        strokeWidth={2}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </section>
+            <div style={{ marginBottom: '1rem' }}>
+              <PriceChart symbol={symbol} />
+            </div>
 
             <section className="panel">
               <h2>Stats</h2>

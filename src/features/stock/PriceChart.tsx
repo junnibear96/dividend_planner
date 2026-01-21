@@ -53,7 +53,7 @@ function PriceChartTooltip({
   )
 }
 
-type RangeKey = '1M' | '3M' | '6M' | '1Y' | 'MAX'
+type RangeKey = '1W' | '1M' | '3M' | '6M' | '1Y' | 'MAX'
 
 type ChartPoint = {
   date: string
@@ -94,11 +94,15 @@ function addMonthsUtc(d: Date, months: number): Date {
 function computeRange(range: RangeKey): { from: string; to: string } {
   const now = new Date()
   const to = toIsoDateUtc(now)
+  if (range === '1W') {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    return { from: toIsoDateUtc(d), to }
+  }
   if (range === '1M') return { from: toIsoDateUtc(addMonthsUtc(now, -1)), to }
   if (range === '3M') return { from: toIsoDateUtc(addMonthsUtc(now, -3)), to }
   if (range === '6M') return { from: toIsoDateUtc(addMonthsUtc(now, -6)), to }
   if (range === '1Y') return { from: toIsoDateUtc(addMonthsUtc(now, -12)), to }
-  // MAX: ask server for the widest range; it will be cached.
   return { from: '1970-01-01', to }
 }
 
@@ -119,7 +123,7 @@ type Props = {
 }
 
 export default function PriceChart({ symbol }: Props) {
-  const [range, setRange] = useState<RangeKey>('1Y')
+  const [range, setRange] = useState<RangeKey>('1M')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [rawPoints, setRawPoints] = useState<EodPoint[]>([])
@@ -138,7 +142,7 @@ export default function PriceChart({ symbol }: Props) {
       }
     }
 
-    ;(async () => {
+    ; (async () => {
       try {
         setIsLoading(true)
         setError(null)
@@ -162,14 +166,22 @@ export default function PriceChart({ symbol }: Props) {
 
   return (
     <section className="panel">
-      <div className="panelTabsTopRow" style={{ marginBottom: '0.5rem' }}>
-        <h2 className="panelTabsTitle" style={{ margin: 0 }}>Price chart</h2>
-        <div className="actionsRow" aria-label="Range selector">
-          {(['1M', '3M', '6M', '1Y', 'MAX'] as const).map((k) => (
+      <div className="panelTabsTopRow" style={{ marginBottom: '1rem' }}>
+        <h2 className="panelTabsTitle" style={{ margin: 0 }}>Price history ({range})</h2>
+        <div className="actionsRow" aria-label="Range selector" style={{ gap: '0.25rem' }}>
+          {(['1W', '1M', '3M', '6M', '1Y', 'MAX'] as const).map((k) => (
             <button
               key={k}
               type="button"
               className={k === range ? 'tab active' : 'tab'}
+              style={{
+                borderRadius: '99px',
+                padding: '0.35rem 0.8rem',
+                fontSize: '0.85rem',
+                background: k === range ? 'var(--accent)' : 'transparent',
+                color: k === range ? '#fff' : 'inherit',
+                border: k === range ? 'none' : '1px solid var(--border)',
+              }}
               onClick={() => setRange(k)}
             >
               {k}
@@ -191,7 +203,7 @@ export default function PriceChart({ symbol }: Props) {
         ) : (
           <div className="chartWrap" aria-label="Historical price chart">
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={points} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+              <LineChart data={points} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
                 <YAxis
                   tick={{ fontSize: 12 }}

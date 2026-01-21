@@ -15,6 +15,10 @@ type PortfolioPositionResponse = {
   position?: unknown
 }
 
+type CashBalanceResponse = {
+  cashBalance?: number
+}
+
 async function jsonOrError(res: Response) {
   let body: unknown = null
   try {
@@ -135,4 +139,49 @@ export async function deletePortfolioPosition(id: string): Promise<void> {
   // Update Cache
   const current = getPortfolioCache() ?? []
   setCache(current.filter((p) => p.id !== id))
+}
+
+const CASH_STORAGE_KEY = 'dividend_portfolio_cash_cache'
+
+function getCashCache(): number | null {
+  try {
+    const raw = localStorage.getItem(CASH_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = Number(raw)
+    return isNaN(parsed) ? null : parsed
+  } catch {
+    return null
+  }
+}
+
+function setCashCache(val: number) {
+  try {
+    localStorage.setItem(CASH_STORAGE_KEY, String(val))
+  } catch {
+    // ignore
+  }
+}
+
+export function getCashBalanceCache(): number | null {
+  return getCashCache()
+}
+
+export async function getCashBalance(): Promise<number> {
+  const res = await fetch('/api/portfolio/cash')
+  const body = (await jsonOrError(res)) as CashBalanceResponse
+  const val = typeof body.cashBalance === 'number' ? body.cashBalance : 0
+  setCashCache(val)
+  return val
+}
+
+export async function updateCashBalance(amount: number): Promise<number> {
+  const res = await fetch('/api/portfolio/cash', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
+  })
+  const body = (await jsonOrError(res)) as CashBalanceResponse
+  const val = typeof body.cashBalance === 'number' ? body.cashBalance : amount
+  setCashCache(val)
+  return val
 }

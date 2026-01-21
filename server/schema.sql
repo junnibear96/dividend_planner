@@ -166,3 +166,10 @@ CREATE TABLE IF NOT EXISTS stock_dividends (
   PRIMARY KEY (symbol, date),
   INDEX idx_stock_div_symbol_date (symbol, date)
 );
+
+CREATE TABLE IF NOT EXISTS portfolio_summary (
+  user_id CHAR(36) NOT NULL,
+  cash_balance DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id)
+);

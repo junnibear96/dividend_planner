@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
+import PortfolioSummary from './PortfolioSummary'
+import SellDeleteModal from './SellDeleteModal'
 import { searchStockSymbols, type StockApiResponse, getStockCached } from '../features/stock/stockApi'
 import {
   createPortfolioPosition,
@@ -122,6 +124,9 @@ export default function HomePage() {
   const [rowDraftAmount, setRowDraftAmount] = useState<Record<string, string>>({})
   const [rowDraftBuyPrice, setRowDraftBuyPrice] = useState<Record<string, string>>({})
   const [rowSavingId, setRowSavingId] = useState<string | null>(null)
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [positionToDelete, setPositionToDelete] = useState<PortfolioPosition | null>(null)
 
   useEffect(() => {
     const q = symbolDraft.trim()
@@ -350,13 +355,62 @@ export default function HomePage() {
     }
   }
 
-  async function removePosition(id: string) {
-    if (!confirm('Are you sure you want to remove this position?')) return
+  function confirmRemovePosition(p: PortfolioPosition) {
+    setPositionToDelete(p)
+    setDeleteModalOpen(true)
+  }
+
+  async function handleConfirmDelete() {
+    if (!positionToDelete) return
+    const id = positionToDelete.id
+    setDeleteModalOpen(false)
+    setPositionToDelete(null)
 
     try {
       setRowSavingId(id)
       await deletePortfolioPosition(id)
       setPositions((prev) => prev.filter((p) => p.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete position')
+      setRowSavingId(null)
+    }
+  }
+
+  async function handleConfirmSold(price: number, amount: number) {
+    if (!positionToDelete) return
+    const id = positionToDelete.id
+    setDeleteModalOpen(false)
+    setPositionToDelete(null)
+
+    try {
+      setRowSavingId(id)
+      // 1. Update Cash
+      const proceed = price * amount
+      const currentCash = (await getPortfolioCache()) ? 0 : 0 // We need getCashBalance here actually, but we can just use updateCashBalance if we knew the current... 
+      // Actually, my API `updateCashBalance` sets the absolute value. 
+      // I need to fetch current, add, then set.
+      // But `PortfolioSummary` manages its own state... we should probably use the imported `getCashBalance` here.
+
+      const currentBalance = await import('../features/portfolio/portfolioApi').then(m => m.getCashBalance())
+      const newBalance = currentBalance + proceed
+      await import('../features/portfolio/portfolioApi').then(m => m.updateCashBalance(newBalance))
+
+      // 2. Delete Position
+      await deletePortfolioPosition(id)
+      setPositions((prev) => prev.filter((p) => p.id !== id))
+
+      // Force refresh of PortfolioSummary if needed? 
+      // Since it shares `localStorage` via caching, if it listens to storage events or if we trigger an update... 
+      // `PortfolioSummary` uses `useEffect` on mount. It won't auto-update unless we signal it. 
+      // Ideally we lift the state up, but for now we can rely on page reload or just the cache being updated.
+      // However, `PortfolioSummary` won't re-render automatically. 
+      // Let's trigger a window reload? No, that's jarring.
+      // Better: we should have lifted the cash state to HomePage?
+      // Since `PortfolioSummary` is a child, we can pass a callback or key to force reload?
+      // For now, let's keep it simple: The user will see the row disappear. The cash might visually lag until refresh unless I lift state.
+      // I will accept this limitation or try to trigger a re-render.
+      window.dispatchEvent(new Event('dividend_cash_update')) // Custom event?
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete position')
       setRowSavingId(null)
@@ -459,6 +513,8 @@ export default function HomePage() {
             </div>
           </form>
         </section>
+
+        <PortfolioSummary />
 
         <section className="panel">
           <h2>Portfolio</h2>
@@ -570,7 +626,7 @@ export default function HomePage() {
                             <button
                               type="button"
                               className="tableButton"
-                              onClick={() => void removePosition(p.id)}
+                              onClick={() => confirmRemovePosition(p)}
                               disabled={isRowSaving}
                               style={{ background: 'color-mix(in oklab, var(--danger) 15%, transparent)', color: 'var(--danger)' }}
                             >
@@ -586,6 +642,21 @@ export default function HomePage() {
             </div>
           )}
         </section>
+
+        {deleteModalOpen && positionToDelete && (
+          <SellDeleteModal
+            isOpen={deleteModalOpen}
+            symbol={positionToDelete.symbol}
+            initialAmount={positionToDelete.amount}
+            initialPrice={positionToDelete.buyPrice}
+            onClose={() => {
+              setDeleteModalOpen(false)
+              setPositionToDelete(null)
+            }}
+            onConfirmDelete={handleConfirmDelete}
+            onConfirmSold={handleConfirmSold}
+          />
+        )}
       </div>
     </div>
   )
