@@ -1,0 +1,17 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: dividend_planner_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: dividend_planner
+      MYSQL_USER: dividend_planner
+      MYSQL_PASSWORD: dbpassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:

@@ -58,9 +58,13 @@ async function updateRealTimeData(pool: mysql.Pool) {
         console.log(`[Scheduler] Found ${allSymbols.length} symbols to update.`)
 
         // 2. Chunk and fetch
-        // EODHD bulk limit is around 50 or so usually per request for real-time? 
-        // "You can request up to 50 tickers at a time."
+        // User requested limit: ~900 symbols per minute.
+        // Chunk size = 50.
+        // Chunks per minute = 900 / 50 = 18.
+        // Seconds per chunk = 60 / 18 = 3.333s.
+        // We'll wait 3400ms between chunks to be safe.
         const CHUNK_SIZE = 50
+        const DELAY_MS = 3400
         let updatedCount = 0
 
         for (let i = 0; i < allSymbols.length; i += CHUNK_SIZE) {
@@ -70,10 +74,6 @@ async function updateRealTimeData(pool: mysql.Pool) {
 
                 // 3. Upsert
                 for (const item of data) {
-                    // item usually has: { code: 'AAPL.US', close: ..., ... }
-                    // We need to match it back to our symbol format if needed.
-                    // Usually recieves 'code' or 'symbol' in response.
-
                     const code = item.code || item.symbol
                     if (!code) continue
 
@@ -86,16 +86,22 @@ async function updateRealTimeData(pool: mysql.Pool) {
                     updatedCount++
                 }
 
-                // Sleep a bit to be nice to API limits if needed
-                await new Promise(r => setTimeout(r, 200))
+                // Rate limit delay
+                await new Promise(r => setTimeout(r, DELAY_MS))
 
-            } catch (err) {
-                console.error(`[Scheduler] Error fetching chunk ${i}-${i + CHUNK_SIZE}:`, err)
+            } catch (err: unknown) {
+                // Handle 402 specifically to avoid spamming logs, but keep others visible
+                const msg = err instanceof Error ? err.message : String(err)
+                if (msg.includes('402')) {
+                    console.warn(`[Scheduler] 402 Payment Required for chunk ${i}-${i + CHUNK_SIZE}. Skipped (rate limit or plan limit).`)
+                } else {
+                    console.error(`[Scheduler] Error fetching chunk ${i}-${i + CHUNK_SIZE}:`, err)
+                }
             }
         }
 
         const duration = ((Date.now() - start) / 1000).toFixed(1)
-        console.log(`[Scheduler] Upgrade complete. Updated ${updatedCount} symbols in ${duration}s.`)
+        console.log(`[Scheduler] Update complete. Updated ${updatedCount} symbols in ${duration}s.`)
 
     } catch (err) {
         console.error('[Scheduler] Fatal error:', err)

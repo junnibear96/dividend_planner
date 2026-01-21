@@ -35,18 +35,18 @@ export default function WatchlistPage() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-        const next = await listWatchlist()
-        if (!cancelled) setItems(next)
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load watchlist')
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
+      ; (async () => {
+        try {
+          setIsLoading(true)
+          setError(null)
+          const next = await listWatchlist()
+          if (!cancelled) setItems(next)
+        } catch (err) {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load watchlist')
+        } finally {
+          if (!cancelled) setIsLoading(false)
+        }
+      })()
     return () => {
       cancelled = true
     }
@@ -130,7 +130,7 @@ export default function WatchlistPage() {
             </div>
 
             <div className="portfolioHeaderRight">
-              <form className="portfolioSearch" onSubmit={onAdd}>
+              <form id="watchlist-add-form" className="portfolioSearch" onSubmit={onAdd}>
                 <SymbolAutocompleteInput
                   value={symbolDraft}
                   onValueChange={setSymbolDraft}
@@ -157,7 +157,7 @@ export default function WatchlistPage() {
               <button
                 type="submit"
                 className="tableButton"
-                form=""
+                form="watchlist-add-form"
                 onClick={(e) => {
                   if (!canAdd) e.preventDefault()
                 }}

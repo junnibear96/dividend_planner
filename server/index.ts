@@ -2533,7 +2533,17 @@ app.post('/api/watchlist/refresh', async (req, res) => {
   }
 })
 
-app.listen(port, () => {
-  console.log(`API listening on http://localhost:${port}`)
-  startScheduler(pool)
-})
+const init = async () => {
+  try {
+    await ensureSchema()
+    app.listen(port, () => {
+      console.log(`API listening on http://localhost:${port}`)
+      startScheduler(pool)
+    })
+  } catch (err) {
+    console.error('Failed to start server:', err)
+    process.exit(1)
+  }
+}
+
+init()

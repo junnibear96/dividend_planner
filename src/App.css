@@ -91,7 +91,7 @@
 
 .portfolioHeaderRight {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
   min-width: 0;
@@ -113,9 +113,28 @@
 }
 
 .tableButton {
-  padding: 0.45rem 0.7rem;
+  padding: 0.55rem 0.85rem;
   border-radius: 10px;
   font-size: 0.95rem;
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.tableButton:hover {
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
+  transform: translateY(-1px);
+}
+
+.tableButton[type='submit'] {
+  background: color-mix(in oklab, var(--accent) 15%, var(--surface));
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--border));
+  color: var(--accent);
+}
+
+.tableButton[type='submit']:hover {
+  background: color-mix(in oklab, var(--accent) 25%, var(--surface));
 }
 
 @media (max-width: 720px) {
@@ -1185,8 +1204,9 @@
 
 .table {
   width: 100%;
-  border-collapse: collapse;
-  background: color-mix(in oklab, var(--surface) 85%, transparent);
+  border-collapse: separate;
+  border-spacing: 0;
+  background: color-mix(in oklab, var(--surface) 30%, transparent);
 }
 
 /* Keep common columns from stretching too wide */
@@ -1209,29 +1229,36 @@
 
 .table th,
 .table td {
-  padding: 0.6rem 0.5rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
 }
 
 .table th {
   text-align: left;
-  font-weight: 600;
-  opacity: 0.9;
-  background: color-mix(in oklab, var(--surface) 65%, transparent);
+  font-weight: 650;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  background: color-mix(in oklab, var(--bg) 95%, transparent);
+  backdrop-filter: blur(8px);
   position: sticky;
   top: 0;
+  z-index: 10;
 }
 
-.table tbody tr:hover {
+.table tbody tr:hover td {
   background: color-mix(in oklab, var(--surface) 65%, transparent);
 }
 
 .profitPos {
-  color: color-mix(in oklab, var(--accent) 78%, var(--text));
+  color: #4ade80; /* Tailwind emerald-400 equivalent for better vibrancy on dark */
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.15);
 }
 
 .profitNeg {
-  color: var(--danger);
+  color: #f87171; /* Tailwind red-400 */
+  text-shadow: 0 0 10px rgba(248, 113, 113, 0.15);
 }
 
 .num {
