@@ -2,7 +2,7 @@
     "nav": {
         "home": "홈",
         "stock": "주식",
-        "symbols": "심볼",
+        "symbols": "주식 종목",
         "watchlist": "관심종목",
         "planner": "플래너",
         "reinvest": "재투자",
@@ -13,14 +13,14 @@
         "title": "관심종목",
         "subtitle": "EODHD (캐싱됨) 시세 + 기초자산",
         "items": "항목",
-        "searchPlaceholder": "심볼 추가 (예: TSLY 또는 TSLY.US)",
+        "searchPlaceholder": "주식 종목 추가 (예: TSLY 또는 TSLY.US)",
         "refreshing": "새로고침 중…",
         "refresh": "새로고침",
         "adding": "추가 중…",
         "add": "추가",
         "empty": "아직 관심종목이 없습니다.",
         "table": {
-            "symbol": "심볼",
+            "symbol": "주식 종목",
             "name": "종목명",
             "price": "현재가",
             "change": "등락",
@@ -83,12 +83,16 @@
         "createAccount": "계정 생성",
         "requestFailed": "요청 실패",
         "signInTitle": "로그인",
-        "toApp": "Dividend Planner"
+        "toApp": "Dividend Planner",
+        "noAccount": "계정이 없으신가요?",
+        "registerHere": "회원가입",
+        "haveAccount": "이미 계정이 있으신가요?",
+        "loginHere": "로그인"
     },
     "landing": {
         "appTitle": "Dividend Planner",
         "subtitle": "배당 수익을 계획하고 예상해보세요.",
-        "searchPlaceholder": "심볼 검색 (예: TSLY.US)",
+        "searchPlaceholder": "주식 검색 (예: TSLY.US)",
         "search": "검색"
     },
     "portfolio": {
@@ -104,13 +108,13 @@
         "home": {
             "title": "홈",
             "subtitle": "오늘의 포트폴리오 요약",
-            "searchPlaceholder": "심볼 검색 (예: TSLY.US)",
+            "searchPlaceholder": "종목 검색 (예: TSLY.US)",
             "search": "검색",
             "totalValue": "총 자산",
             "profit": "수익금",
             "problem": "문제 발생",
             "addTitle": "종목 추가",
-            "symbolLabel": "심볼",
+            "symbolLabel": "종목",
             "amountLabel": "수량",
             "buyPriceLabel": "매수 단가 (선택)",
             "buyPricePlaceholder": "예: 37.50",
@@ -123,7 +127,7 @@
             "remove": "삭제"
         },
         "table": {
-            "symbol": "심볼",
+            "symbol": "종목",
             "price": "현재가",
             "change": "등락",
             "buyPrice": "단가",
@@ -143,7 +147,7 @@
         "errors": {
             "loginToAdd": "보유 종목을 추가하려면 로그인하세요.",
             "cannotAdd": "보유 종목을 추가할 수 없습니다.",
-            "symbolRequired": "종목 심볼이 필요합니다.",
+            "symbolRequired": "종목 약자이 필요합니다.",
             "sharesPositive": "수량은 양수여야 합니다.",
             "dividendPositive": "주당 배당금은 양수여야 합니다.",
             "invalidNumber": "잘못된 숫자 입력입니다.",
@@ -171,7 +175,7 @@
         },
         "add": {
             "title": "보유 종목 추가",
-            "symbolLabel": "종목 심볼",
+            "symbolLabel": "종목 약자",
             "symbolPlaceholder": "AAPL",
             "sharesLabel": "수량",
             "sharesPlaceholder": "10",
@@ -198,7 +202,7 @@
             "emptyMonthly": "월간 배당 종목이 없습니다.",
             "emptyYearly": "연간 배당 종목이 없습니다.",
             "reinvestCandidates": "재투자 후보",
-            "symbol": "심볼",
+            "symbol": "주식 종목",
             "shares": "수량",
             "dividendPerShare": "주당 배당금",
             "income": "수입",
@@ -244,7 +248,7 @@
             "showing": "{{total}}개 중 {{start}}–{{end}} 표시"
         },
         "table": {
-            "symbol": "심볼",
+            "symbol": "주식 종목",
             "name": "이름",
             "type": "유형",
             "currency": "통화"
@@ -293,7 +297,7 @@
             "destination": "투자처(Destination)",
             "weekSuffix": " ({{week}}주차)",
             "weekCascade": "{{editWeek}}주차 수정 시 {{range}}에 적용됩니다.",
-            "destinationSymbol": "투자할 심볼",
+            "destinationSymbol": "투자할 주식 종목",
             "destinationBasket": "배분 바스켓",
             "minAmount": "최소 금액 (USD)",
             "fractional": "소수점 단위 주식(Fractional Shares) 허용",
@@ -326,14 +330,14 @@
             "empty": "재투자 내역이 없습니다."
         },
         "table": {
-            "symbol": "심볼",
+            "symbol": "주식 종목",
             "weight": "비중"
         },
         "errors": {
             "weekError": "{{week}}주차: {{error}}",
-            "destinationSymbolRequired": "투자할 심볼이 필요합니다.",
+            "destinationSymbolRequired": "투자할 주식 종목이 필요합니다.",
             "basketEmpty": "바스켓에 최소 1개 이상의 자산이 있어야 합니다.",
-            "basketSymbolEmpty": "바스켓에 심볼이 없는 항목이 있습니다.",
+            "basketSymbolEmpty": "바스켓에 주식 종목이 없는 항목이 있습니다.",
             "basketWeightPositive": "바스켓 비중은 0보다 커야 합니다.",
             "basketTotalPositive": "바스켓 총 비중은 0보다 커야 합니다.",
             "fixWeekSettings": "저장하기 전에 1–4주차 설정을 확인하세요. ({{count}}개 문제)",

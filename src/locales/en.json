@@ -83,7 +83,11 @@
         "createAccount": "Create account",
         "requestFailed": "Request failed",
         "signInTitle": "Sign in",
-        "toApp": "to Dividend Planner"
+        "toApp": "to Dividend Planner",
+        "noAccount": "Don't have an account?",
+        "registerHere": "Register here",
+        "haveAccount": "Already have an account?",
+        "loginHere": "Login here"
     },
     "landing": {
         "appTitle": "Dividend Planner",

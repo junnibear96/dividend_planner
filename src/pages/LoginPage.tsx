@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import UserAuth from '../UserAuth'
@@ -29,6 +29,12 @@ export default function LoginPage() {
             if (next) navigate('/home', { replace: true })
           }}
         />
+        <p style={{ marginTop: '1rem', textAlign: 'center', fontSize: '0.9rem' }}>
+          {t('auth.noAccount')}{' '}
+          <Link to="/register" className="linkButton">
+            {t('auth.registerHere')}
+          </Link>
+        </p>
       </div>
     </div>
   )
