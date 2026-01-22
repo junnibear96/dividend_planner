@@ -1,0 +1,41 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "test@gmail.com"
+    }
+  ],
+  "positionsByUser": [
+    {
+      "user_id": "6a26d2ec-00d8-47fc-ac95-aec025d3e264",
+      "count": 47
+    }
+  ],
+  "samplePositions": [
+    {
+      "id": 11,
+      "user_id": "6a26d2ec-00d8-47fc-ac95-aec025d3e264",
+      "symbol": "AGNC"
+    },
+    {
+      "id": 12,
+      "user_id": "6a26d2ec-00d8-47fc-ac95-aec025d3e264",
+      "symbol": "AMZY"
+    },
+    {
+      "id": 1,
+      "user_id": "6a26d2ec-00d8-47fc-ac95-aec025d3e264",
+      "symbol": "APLY"
+    },
+    {
+      "id": 30,
+      "user_id": "6a26d2ec-00d8-47fc-ac95-aec025d3e264",
+      "symbol": "BIL"
+    },
+    {
+      "id": 36,
+      "user_id": "6a26d2ec-00d8-47fc-ac95-aec025d3e264",
+      "symbol": "BRK-B"
+    }
+  ]
+}

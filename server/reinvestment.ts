@@ -107,8 +107,11 @@ function addPeriod(date: Date, frequency: DividendFrequency | RuleFrequency): Da
     next.setUTCMonth(next.getUTCMonth() + 1)
     return next
   }
-  next.setUTCFullYear(next.getUTCFullYear() + 1)
-  return next
+  if (frequency === 'yearly') {
+    next.setUTCFullYear(next.getUTCFullYear() + 1)
+    return next
+  }
+  throw new Error(`Unsupported frequency: ${frequency}`)
 }
 
 function safeNumber(v: unknown): number | null {
@@ -187,17 +190,17 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
 
   const row = rows[0] as
     | {
-        id: string
-        enabled: number
-        sourceScope: SourceScope
-        destinationType: DestinationType
-        destinationAssets: unknown
-        scheduleMode?: ScheduleMode
-        frequency: RuleFrequency
-        weekDestinations?: unknown
-        minimumAmount: number
-        fractionalSharesAllowed: number
-      }
+      id: string
+      enabled: number
+      sourceScope: SourceScope
+      destinationType: DestinationType
+      destinationAssets: unknown
+      scheduleMode?: ScheduleMode
+      frequency: RuleFrequency
+      weekDestinations?: unknown
+      minimumAmount: number
+      fractionalSharesAllowed: number
+    }
     | undefined
 
   if (row) {
@@ -205,13 +208,13 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
       ? (row.destinationAssets as unknown[])
       : typeof row.destinationAssets === 'string'
         ? (() => {
-            try {
-              const parsed = JSON.parse(row.destinationAssets)
-              return Array.isArray(parsed) ? parsed : []
-            } catch {
-              return []
-            }
-          })()
+          try {
+            const parsed = JSON.parse(row.destinationAssets)
+            return Array.isArray(parsed) ? parsed : []
+          } catch {
+            return []
+          }
+        })()
         : []
 
     const destinationAssets: RuleDestinationAsset[] = assets
@@ -242,8 +245,8 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
         const daRaw = (v as any).destinationAssets
         const da = Array.isArray(daRaw)
           ? daRaw
-              .map((a: any) => ({ symbol: normalizeSymbol(a?.symbol), weight: safeNumber(a?.weight) ?? undefined }))
-              .filter((a: any) => Boolean(a.symbol))
+            .map((a: any) => ({ symbol: normalizeSymbol(a?.symbol), weight: safeNumber(a?.weight) ?? undefined }))
+            .filter((a: any) => Boolean(a.symbol))
           : []
         if (dt === 'SAME_AS_SOURCE' || dt === 'SINGLE_ASSET' || dt === 'ALLOCATION_BASKET') {
           out[Number(k)] = { destinationType: dt, destinationAssets: da }

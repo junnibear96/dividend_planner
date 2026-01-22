@@ -114,7 +114,7 @@ export default function HomePage() {
   const [positions, setPositions] = useState<PortfolioPosition[]>(() => getPortfolioCache() ?? [])
   const [quotesBySymbol, setQuotesBySymbol] = useState<Record<string, QuoteView | undefined>>({})
 
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => !getPortfolioCache()?.length)
   const [error, setError] = useState<string | null>(null)
 
   const [symbolDraft, setSymbolDraft] = useState('')
@@ -190,16 +190,20 @@ export default function HomePage() {
 
     async function load() {
       try {
-        setIsLoading(true)
         setError(null)
-
-        const next = await listPortfolio()
-        if (cancelled) return
-        setPositions(next)
+        // Only fetch from DB if we don't have local data
+        let currentPositions = positions
+        if (currentPositions.length === 0) {
+          setIsLoading(true)
+          const next = await listPortfolio()
+          if (cancelled) return
+          setPositions(next)
+          currentPositions = next
+        }
 
         setRowDraftAmount((prev) => {
           const out: Record<string, string> = { ...prev }
-          for (const p of next) {
+          for (const p of currentPositions) {
             if (out[p.id] === undefined) out[p.id] = String(p.amount)
           }
           return out
@@ -207,7 +211,7 @@ export default function HomePage() {
 
         setRowDraftBuyPrice((prev) => {
           const out: Record<string, string> = { ...prev }
-          for (const p of next) {
+          for (const p of currentPositions) {
             if (out[p.id] === undefined) {
               out[p.id] = typeof p.buyPrice === 'number' ? String(p.buyPrice) : ''
             }
@@ -216,7 +220,7 @@ export default function HomePage() {
         })
 
         const uniqueSymbols = Array.from(
-          new Set(next.map((p) => p.symbol.trim().toUpperCase()).filter(Boolean)),
+          new Set(currentPositions.map((p) => p.symbol.trim().toUpperCase()).filter(Boolean)),
         )
 
         const results = await Promise.all(
@@ -225,7 +229,10 @@ export default function HomePage() {
               const q = await loadQuote(s)
               return [s, q] as const
             } catch {
-              return [s, { symbol: s, price: null, previousClose: null, change: null, changePercent: null, source: null }] as const
+              return [
+                s,
+                { symbol: s, price: null, previousClose: null, change: null, changePercent: null, source: null },
+              ] as const
             }
           }),
         )

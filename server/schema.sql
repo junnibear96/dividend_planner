@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS holdings (
 -- Simple portfolio positions used by the logged-in Home dashboard
 
 CREATE TABLE IF NOT EXISTS portfolio_positions (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   user_id CHAR(36) NOT NULL,
   symbol VARCHAR(32) NOT NULL,
   amount DECIMAL(18,6) NOT NULL,

@@ -170,6 +170,7 @@
         "summary": {
             "title": "Estimated totals",
             "yearly": "Yearly",
+            "quarterly": "Quarterly",
             "monthly": "Monthly",
             "weekly": "Weekly"
         },
@@ -184,6 +185,7 @@
             "frequency": {
                 "weekly": "Weekly",
                 "monthly": "Monthly",
+                "quarterly": "Quarterly",
                 "yearly": "Yearly"
             },
             "submit": "Add holding",
@@ -192,6 +194,7 @@
         "sections": {
             "weeklyTitle": "Weekly dividend income",
             "monthlyTitle": "Monthly dividend income",
+            "quarterlyTitle": "Quarterly dividend income",
             "yearlyTitle": "Yearly dividend income",
             "totalTitle": "Total dividend (annualized estimate)"
         },
@@ -200,6 +203,7 @@
             "empty": "No holdings yet.",
             "emptyWeekly": "No weekly dividend holdings.",
             "emptyMonthly": "No monthly dividend holdings.",
+            "emptyQuarterly": "No quarterly dividend holdings.",
             "emptyYearly": "No yearly dividend holdings.",
             "reinvestCandidates": "Reinvest candidates",
             "symbol": "Symbol",
@@ -214,6 +218,7 @@
         "annualizedTable": {
             "weeklyTotal": "Weekly total",
             "monthlyTotal": "Monthly total",
+            "quarterlyTotal": "Quarterly total",
             "yearlyTotal": "Yearly total",
             "total": "Total"
         }

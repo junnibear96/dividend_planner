@@ -38,14 +38,14 @@ async function jsonOrError(res: Response) {
 function asPosition(raw: unknown): PortfolioPosition | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as any
-  if (typeof r.id !== 'string') return null
+  if (typeof r.id !== 'string' && typeof r.id !== 'number') return null
   if (typeof r.symbol !== 'string') return null
   if (typeof r.amount !== 'number') return null
   if (!(r.buyPrice === null || typeof r.buyPrice === 'number')) return null
   if (typeof r.createdAt !== 'string') return null
   if (typeof r.updatedAt !== 'string') return null
   return {
-    id: r.id,
+    id: String(r.id),
     symbol: r.symbol,
     amount: r.amount,
     buyPrice: r.buyPrice,

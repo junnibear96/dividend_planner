@@ -23,7 +23,7 @@ type HoldingRow = {
   symbol: string
   shares: number
   dividendPerShare: number
-  dividendFrequency: 'weekly' | 'monthly' | 'yearly'
+  dividendFrequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
   includeInReinvestment: boolean
   createdAt: string
 }
@@ -1369,10 +1369,12 @@ app.post('/api/auth/logout', (_req, res) => {
   res.status(204).end()
 })
 
-app.get('/api/holdings', async (_req, res) => {
+
+
+app.get('/api/holdings', async (req, res) => {
   try {
     await ensureSchema()
-    const user = readSession(_req)
+    const user = readSession(req)
     if (!user) {
       res.status(401).json({ error: 'Not authenticated' })
       return
@@ -1380,7 +1382,25 @@ app.get('/api/holdings', async (_req, res) => {
 
     // Accrue dividends + run scheduled reinvestment deterministically on reads.
     await processPortfolioForReinvestment(pool, user.id)
-    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+
+    // 1. Fetch real portfolio positions
+    const [portfolioRows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT
+        id,
+        symbol,
+        amount
+       FROM portfolio_positions
+       WHERE user_id = :userId`,
+      { userId: user.id },
+    )
+    const portfolioPositions = portfolioRows as unknown as { id: number; symbol: string; amount: string }[]
+
+    // 2. Fetch configured holding metadata
+    // We only care about dividend_per_share, dividend_frequency, include_in_reinvestment from here
+    // IF we match a portfolio position.
+    // IF we don't match, we might want to still show it (manual holding not in portfolio)? 
+    // For now, let's show EVERYTHING: Union of Portfolio and Manual Holdings.
+    const [holdingRows] = await pool.query<mysql.RowDataPacket[]>(
       `SELECT 
         id,
         symbol,
@@ -1390,20 +1410,66 @@ app.get('/api/holdings', async (_req, res) => {
         include_in_reinvestment AS includeInReinvestment,
         created_at AS createdAt
       FROM holdings
-      WHERE user_id = :userId
-      ORDER BY created_at DESC`,
+      WHERE user_id = :userId`,
       { userId: user.id },
     )
+    const storedHoldings = holdingRows as unknown as HoldingRow[]
 
-    const holdings = (rows as unknown as HoldingRow[]).map((h) => ({
-      ...h,
-      includeInReinvestment: Boolean(
-        (h as unknown as { includeInReinvestment: unknown }).includeInReinvestment,
-      ),
-    }))
+    // Map by symbol for easy lookup
+    const holdingMap = new Map<string, HoldingRow>()
+    for (const h of storedHoldings) {
+      holdingMap.set(toSymbol(h.symbol), h)
+    }
+
+    const combined: HoldingRow[] = []
+    const processedSymbols = new Set<string>()
+
+    // Priority 1: Portfolio Positions
+    for (const p of portfolioPositions) {
+      const sym = toSymbol(p.symbol)
+      processedSymbols.add(sym)
+
+      const matched = holdingMap.get(sym)
+      if (matched) {
+        // Exists in both. Use Holding ID (UUID) for editing, but Portfolio Amount for shares.
+        combined.push({
+          ...matched,
+          shares: Number(p.amount), // Override with real amount
+          includeInReinvestment: Boolean((matched as any).includeInReinvestment),
+        })
+      } else {
+        // Only in Portfolio. Create a "virtual" holding.
+        combined.push({
+          id: String(p.id), // INT ID (stringified)
+          symbol: sym,
+          shares: Number(p.amount),
+          dividendPerShare: 0,
+          dividendFrequency: 'yearly', // Default
+          includeInReinvestment: true,
+          createdAt: new Date().toISOString(), // Mock
+        })
+      }
+    }
+
+    // Priority 2: Manual Holdings (that are NOT in portfolio)
+    // Keep them? User might want to plan for things they don't own yet.
+    for (const h of storedHoldings) {
+      const sym = toSymbol(h.symbol)
+      if (!processedSymbols.has(sym)) {
+        combined.push({
+          ...h,
+          includeInReinvestment: Boolean((h as any).includeInReinvestment),
+        })
+      }
+    }
+
+    combined.sort((a, b) => b.shares * a.dividendPerShare - b.shares * b.dividendPerShare) // Rough sort by income? Or just symbol?
+    // Let's keep existing sort: created_at desc? 
+    // Virtual ones have fake created_at. Let's just sort by Symbol?
+    // Or just default push order (Portfolio first, then manual).
 
     res.json({
-      holdings,
+      holdings: combined,
     })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'DB error' })
@@ -1432,6 +1498,7 @@ app.get('/api/portfolio', async (req, res) => {
       ORDER BY updated_at DESC, created_at DESC`,
       { userId: user.id },
     )
+    console.log(`[API] GET /portfolio userId=${user.id} returned ${rows.length} rows`)
 
     res.json({
       positions: (rows as unknown as PortfolioPositionRow[]).map((r) => ({
@@ -1718,6 +1785,7 @@ app.post('/api/holdings', async (req, res) => {
     if (
       dividendFrequency !== 'weekly' &&
       dividendFrequency !== 'monthly' &&
+      dividendFrequency !== 'quarterly' &&
       dividendFrequency !== 'yearly'
     ) {
       res.status(400).json({ error: 'Dividend frequency must be weekly, monthly, or yearly' })

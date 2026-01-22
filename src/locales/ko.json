@@ -170,6 +170,7 @@
         "summary": {
             "title": "예상 총계",
             "yearly": "연간",
+            "quarterly": "분기",
             "monthly": "월간",
             "weekly": "주간"
         },
@@ -184,6 +185,7 @@
             "frequency": {
                 "weekly": "매주",
                 "monthly": "매월",
+                "quarterly": "매분기",
                 "yearly": "매년"
             },
             "submit": "추가",
@@ -192,6 +194,7 @@
         "sections": {
             "weeklyTitle": "주간 배당 수입",
             "monthlyTitle": "월간 배당 수입",
+            "quarterlyTitle": "분기별 배당 수입",
             "yearlyTitle": "연간 배당 수입",
             "totalTitle": "총 배당금 (연환산 추정치)"
         },
@@ -200,6 +203,7 @@
             "empty": "보유 중인 종목이 없습니다.",
             "emptyWeekly": "주간 배당 종목이 없습니다.",
             "emptyMonthly": "월간 배당 종목이 없습니다.",
+            "emptyQuarterly": "분기별 배당 종목이 없습니다.",
             "emptyYearly": "연간 배당 종목이 없습니다.",
             "reinvestCandidates": "재투자 후보",
             "symbol": "주식 종목",
@@ -214,6 +218,7 @@
         "annualizedTable": {
             "weeklyTotal": "주간 합계",
             "monthlyTotal": "월간 합계",
+            "quarterlyTotal": "분기 합계",
             "yearlyTotal": "연간 합계",
             "total": "총계"
         }

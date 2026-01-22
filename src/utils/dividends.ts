@@ -4,7 +4,7 @@ export type DividendIncomes = {
   weekly: number
 }
 
-export type DividendFrequency = 'weekly' | 'monthly' | 'yearly'
+export type DividendFrequency = 'weekly' | 'monthly' | 'quarterly' | 'yearly'
 
 export type DividendIncomePeriod = keyof DividendIncomes
 

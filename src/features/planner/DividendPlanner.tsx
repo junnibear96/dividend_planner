@@ -105,6 +105,10 @@ export default function DividendPlanner({
     () => holdings.filter((h) => h.dividendFrequency === 'monthly'),
     [holdings],
   )
+  const quarterlyHoldings = useMemo(
+    () => holdings.filter((h) => h.dividendFrequency === 'quarterly'),
+    [holdings],
+  )
   const yearlyHoldings = useMemo(
     () => holdings.filter((h) => h.dividendFrequency === 'yearly'),
     [holdings],
@@ -113,23 +117,26 @@ export default function DividendPlanner({
   const frequencyTotals = useMemo(() => {
     const weekly = weeklyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
     const monthly = monthlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
+    const quarterly = quarterlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
     const yearly = yearlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
-    return { weekly, monthly, yearly }
-  }, [weeklyHoldings, monthlyHoldings, yearlyHoldings])
+    return { weekly, monthly, quarterly, yearly }
+  }, [weeklyHoldings, monthlyHoldings, quarterlyHoldings, yearlyHoldings])
 
   const annualizedTotals = useMemo(() => {
     const annualWeekly = frequencyTotals.weekly * 4 * 12
     const annualMonthly = frequencyTotals.monthly * 12
+    const annualQuarterly = frequencyTotals.quarterly * 4
     const annualYearly = frequencyTotals.yearly
-    const total = annualWeekly + annualMonthly + annualYearly
-    return { annualWeekly, annualMonthly, annualYearly, total }
+    const total = annualWeekly + annualMonthly + annualQuarterly + annualYearly
+    return { annualWeekly, annualMonthly, annualQuarterly, annualYearly, total }
   }, [frequencyTotals])
 
   const totals = useMemo(() => {
     const yearly = annualizedTotals.total
+    const quarterly = yearly / 4
     const monthly = yearly / 12
     const weekly = yearly / (4 * 12)
-    return { weekly, monthly, yearly }
+    return { weekly, monthly, quarterly, yearly }
   }, [annualizedTotals])
 
   const reinvestCandidates = useMemo(() => {
@@ -145,9 +152,10 @@ export default function DividendPlanner({
     return {
       weekly: topSymbols(weeklyHoldings),
       monthly: topSymbols(monthlyHoldings),
+      quarterly: topSymbols(quarterlyHoldings),
       yearly: topSymbols(yearlyHoldings),
     }
-  }, [weeklyHoldings, monthlyHoldings, yearlyHoldings])
+  }, [weeklyHoldings, monthlyHoldings, quarterlyHoldings, yearlyHoldings])
 
   const parsedEditShares = toPositiveNumber(editShares)
   const parsedEditDividendPerShare = toPositiveNumber(editDividendPerShare)
@@ -441,6 +449,10 @@ export default function DividendPlanner({
             <div className="summaryValue">{formatMoney(totals.yearly)}</div>
           </div>
           <div className="summaryCard">
+            <div className="summaryKey">{t('planner.summary.quarterly')}</div>
+            <div className="summaryValue">{formatMoney(totals.quarterly)}</div>
+          </div>
+          <div className="summaryCard">
             <div className="summaryKey">{t('planner.summary.monthly')}</div>
             <div className="summaryValue">{formatMoney(totals.monthly)}</div>
           </div>
@@ -448,8 +460,9 @@ export default function DividendPlanner({
             <div className="summaryKey">{t('planner.summary.weekly')}</div>
             <div className="summaryValue">{formatMoney(totals.weekly)}</div>
           </div>
-        </div>
-      ) : null}
+        </div >
+      ) : null
+      }
 
       <section className="panel">
         <h2>{t('planner.add.title')}</h2>
@@ -488,6 +501,9 @@ export default function DividendPlanner({
               >
                 <option value="weekly">{t('planner.add.frequency.weekly')}</option>
                 <option value="monthly">{t('planner.add.frequency.monthly')}</option>
+                <option value="weekly">{t('planner.add.frequency.weekly')}</option>
+                <option value="monthly">{t('planner.add.frequency.monthly')}</option>
+                <option value="quarterly">{t('planner.add.frequency.quarterly')}</option>
                 <option value="yearly">{t('planner.add.frequency.yearly')}</option>
               </select>
             </div>
@@ -673,6 +689,83 @@ export default function DividendPlanner({
       </section>
 
       <section className="panel">
+        <h2>{t('planner.sections.quarterlyTitle')}</h2>
+        {isLoading ? (
+          <p className="empty">{t('planner.table.loading')}</p>
+        ) : quarterlyHoldings.length === 0 ? (
+          <p className="empty">{t('planner.table.emptyQuarterly')}</p>
+        ) : (
+          <>
+            <p className="hint">
+              {t('planner.table.reinvestCandidates')}: {reinvestCandidates.quarterly.length ? reinvestCandidates.quarterly.join(', ') : '—'}
+            </p>
+            <div className="tableWrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t('planner.table.symbol')}</th>
+                    <th className="num">{t('planner.table.shares')}</th>
+                    <th className="num">{t('planner.table.dividendPerShare')}</th>
+                    <th className="num">{t('planner.table.income')}</th>
+                    <th className="num">{t('planner.table.includeInReinvestment')}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {quarterlyHoldings.map((h) => (
+                    <tr key={h.id}>
+                      <td className="mono">{h.symbol}</td>
+                      <td className="num">{h.shares}</td>
+                      <td className="num">{formatMoney(h.dividendPerShare)}</td>
+                      <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
+                      <td className="num">
+                        <input
+                          type="checkbox"
+                          checked={normalizeIncludeFlag(h)}
+                          onChange={(e) => void toggleIncludeInReinvestment(h, e.target.checked)}
+                          disabled={!canWrite}
+                          aria-label={`Include ${h.symbol} in reinvestment`}
+                        />
+                      </td>
+                      <td className="num">
+                        <button
+                          type="button"
+                          className="linkButton"
+                          onClick={() => openEdit(h)}
+                          disabled={!canWrite}
+                        >
+                          {t('planner.table.edit')}
+                        </button>
+                        <span aria-hidden="true">&nbsp;&nbsp;</span>
+                        <button
+                          type="button"
+                          className="linkButton"
+                          onClick={() => removeHolding(h.id)}
+                          disabled={!canWrite}
+                        >
+                          {t('planner.table.remove')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="totalsLabel">
+                      {t('planner.table.totalLabel')}
+                    </td>
+                    <td className="num totalsValue">{formatMoney(frequencyTotals.quarterly)}</td>
+                    <td />
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
         <h2>{t('planner.sections.yearlyTitle')}</h2>
         {isLoading ? (
           <p className="empty">{t('planner.table.loading')}</p>
@@ -762,6 +855,7 @@ export default function DividendPlanner({
                 <tr>
                   <th className="num">{t('planner.annualizedTable.weeklyTotal')}</th>
                   <th className="num">{t('planner.annualizedTable.monthlyTotal')}</th>
+                  <th className="num">{t('planner.annualizedTable.quarterlyTotal')}</th>
                   <th className="num">{t('planner.annualizedTable.yearlyTotal')}</th>
                   <th className="num">{t('planner.annualizedTable.total')}</th>
                 </tr>
@@ -770,6 +864,7 @@ export default function DividendPlanner({
                 <tr>
                   <td className="num">{formatMoney(annualizedTotals.annualWeekly)}</td>
                   <td className="num">{formatMoney(annualizedTotals.annualMonthly)}</td>
+                  <td className="num">{formatMoney(annualizedTotals.annualQuarterly)}</td>
                   <td className="num">{formatMoney(annualizedTotals.annualYearly)}</td>
                   <td className="num">{formatMoney(annualizedTotals.total)}</td>
                 </tr>
