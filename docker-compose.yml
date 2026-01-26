@@ -7,7 +7,7 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: dividend_planner
       MYSQL_USER: dividend_planner
-      MYSQL_PASSWORD: dbpassword
+      MYSQL_PASSWORD: dividend_planner
     ports:
       - "3307:3306"
     volumes:

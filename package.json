@@ -8,6 +8,7 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:all": "concurrently -n server,web -c cyan,green \"npm run dev:server\" \"npm run dev\"",
     "db:check": "tsx server/check-db.ts",
+    "db:setup": "tsx server/apply-schema.ts",
     "smoke:test": "tsx server/smoke-test.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
