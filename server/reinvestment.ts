@@ -114,7 +114,7 @@ function addPeriod(date: Date, frequency: DividendFrequency | RuleFrequency): Da
   throw new Error(`Unsupported frequency: ${frequency}`)
 }
 
-function safeNumber(v: unknown): number | null {
+export function safeNumber(v: unknown): number | null {
   const n = typeof v === 'number' ? v : Number(v)
   if (!Number.isFinite(n)) return null
   return n
@@ -387,7 +387,7 @@ async function getLastExecutionDate(
   return d
 }
 
-async function getLatestSimulatedPrice(conn: mysql.PoolConnection, symbol: string): Promise<number | null> {
+export async function getLatestSimulatedPrice(conn: mysql.PoolConnection, symbol: string): Promise<number | null> {
   const [eodRows] = await conn.query<mysql.RowDataPacket[]>(
     `SELECT close
      FROM stock_eod

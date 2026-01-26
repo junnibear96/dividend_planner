@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PlannerHolding } from '../../planner/DividendPlanner'
-import { fetchReinvestmentHistory, fetchReinvestmentSummary, type ReinvestmentExecution, type ReinvestmentRule } from '../reinvestmentApi'
+import {
+  fetchReinvestmentHistory,
+  fetchCollectionPlans,
+  type ReinvestmentExecution,
+  type CollectionPlan
+} from '../reinvestmentApi'
 import ReinvestmentTimeline from './ReinvestmentTimeline'
 import { makeUtcDate, type MonthNumber } from './dateUtils'
 import type { GenerateWeeklyReinvestmentTimeline, Holdings, ReinvestmentExecutionWeek, TimelineShares } from './types'
-import type { WeekIndex } from '../WeekTabs'
+
+// --- Helpers ---
 
 async function jsonOrNull(res: Response) {
   try {
@@ -89,7 +95,6 @@ function subtractShares(base: TimelineShares, delta: TimelineShares): TimelineSh
 }
 
 function buildPriceBySymbolFromHistory(executions: ReinvestmentExecution[]): Record<string, number> {
-  // Use the latest observed execution price per symbol; fallback later if missing.
   const latest: Record<string, { t: number; price: number }> = {}
   for (const e of executions) {
     const t = new Date(e.executedAt).getTime()
@@ -109,29 +114,6 @@ function buildPriceBySymbolFromHistory(executions: ReinvestmentExecution[]): Rec
   return out
 }
 
-function normalizeWeights(assets: Array<{ symbol: string; weight?: number }>): Array<{ symbol: string; weight: number }> {
-  const cleaned: Array<{ symbol: string; weight: number }> = []
-  for (const a of assets) {
-    const sym = String(a.symbol ?? '').trim().toUpperCase()
-    if (!sym) continue
-    const w = Number(a.weight ?? 0)
-    if (!Number.isFinite(w) || w <= 0) continue
-    cleaned.push({ symbol: sym, weight: w })
-  }
-  const total = cleaned.reduce((s, a) => s + a.weight, 0)
-  if (total <= 0) return []
-  return cleaned.map((a) => ({ symbol: a.symbol, weight: a.weight / total }))
-}
-
-function effectiveDestination(rule: ReinvestmentRule, weekIndex: number) {
-  if (rule.scheduleMode !== 'WEEK_OF_MONTH') {
-    return { destinationType: rule.destinationType, destinationAssets: rule.destinationAssets }
-  }
-  const w = (weekIndex === 5 ? 4 : weekIndex) as 1 | 2 | 3 | 4
-  const d = rule.weekDestinations?.[w]
-  return d ?? { destinationType: rule.destinationType, destinationAssets: rule.destinationAssets }
-}
-
 function weeklyEquivalentDividendPerShare(h: PlannerHolding): number {
   const dps = Number(h.dividendPerShare)
   if (!Number.isFinite(dps) || dps < 0) return 0
@@ -140,26 +122,27 @@ function weeklyEquivalentDividendPerShare(h: PlannerHolding): number {
   return dps / 52
 }
 
-export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekIndex } = {}) {
-  const { focusWeekIndex } = props
+// --- Component ---
+
+export default function ReinvestmentTimelineLive() {
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [holdingsRows, setHoldingsRows] = useState<PlannerHolding[]>([])
-  const [rule, setRule] = useState<ReinvestmentRule | null>(null)
   const [history, setHistory] = useState<ReinvestmentExecution[]>([])
+  const [plans, setPlans] = useState<CollectionPlan[]>([])
 
   useEffect(() => {
     let alive = true
     setIsLoading(true)
     setError(null)
-    Promise.all([fetchHoldings(), fetchReinvestmentSummary(), fetchReinvestmentHistory(200)])
-      .then(([h, s, hist]) => {
+    Promise.all([fetchHoldings(), fetchReinvestmentHistory(200), fetchCollectionPlans()])
+      .then(([h, hist, p]) => {
         if (!alive) return
         setHoldingsRows(h)
-        setRule(s.rule)
         setHistory(Array.isArray(hist.executions) ? hist.executions : [])
+        setPlans(p)
       })
       .catch((err: unknown) => {
         if (!alive) return
@@ -178,7 +161,6 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
   const initialMY = monthYearFromDateUtc(now)
 
   const { year: compoundingStartYear, month: compoundingStartMonth } = useMemo(() => {
-    // Anchor compounding to earliest observed execution month; fallback to current month.
     let earliest: Date | null = null
     for (const e of history) {
       const d = new Date(e.executedAt)
@@ -189,34 +171,23 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
   }, [history, initialMY])
 
   const baselineHoldings: Holdings = useMemo(() => {
-    // Best-effort baseline: current holdings minus all shares bought since compounding start.
-    // (Assumes reinvestments are the primary driver of share increases.)
     const current = sharesBySymbolFromHoldings(holdingsRows)
-
     const startDate = makeUtcDate(compoundingStartYear, compoundingStartMonth, 1)
-
-    // Subtract executions that occur on/after the compounding start month.
     let baseline = { ...current }
     for (const e of buildExecutionWeeks(history)) {
       const t = new Date(e.executedAt)
       if (!Number.isFinite(t.getTime())) continue
-      // If the execution is within or after the start month, subtract.
       if (t.getTime() >= startDate.getTime()) {
         baseline = subtractShares(baseline, e.sharesAdded)
       }
     }
-
-    // Clamp for safety.
     baseline = clampNonNegativeShares(baseline)
-
     return { sharesBySymbol: baseline }
   }, [holdingsRows, history, compoundingStartYear, compoundingStartMonth])
 
   const executionWeeks = useMemo(() => buildExecutionWeeks(history), [history])
 
   const generator: GenerateWeeklyReinvestmentTimeline | undefined = useMemo(() => {
-    if (!rule) return undefined
-
     const priceBySymbol = buildPriceBySymbolFromHistory(history)
     const holdingsBySymbol: Record<string, PlannerHolding> = {}
     for (const h of holdingsRows) {
@@ -225,22 +196,18 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
       holdingsBySymbol[sym] = h
     }
 
-    return ({ startDate, weekIndex, startingShares }) => {
-      // Determine eligible symbols based on rule scope.
-      const eligibleSymbols = Object.keys(startingShares).filter((sym) => {
-        const h = holdingsBySymbol[sym]
-        if (!h) return false
-        if (rule.sourceScope === 'SELECTED') return h.includeInReinvestment !== false
-        return true
-      })
+    const activePlans = plans.filter(p => p.status === 'ACTIVE')
 
-      // Deterministic dividend accrual per slice:
-      // - weekly: every week
-      // - monthly: week 1
-      // - yearly: January week 1
+    return ({ startDate, weekIndex, startingShares }) => {
+
+      // 1. Calculate Expected Dividends
       let dividendEarned = 0
       const dividendBySymbol: Record<string, number> = {}
-      for (const sym of eligibleSymbols) {
+
+      const allSymbols = new Set(Object.keys(startingShares))
+      activePlans.forEach(p => allSymbols.add(p.targetStock))
+
+      for (const sym of allSymbols) {
         const h = holdingsBySymbol[sym]
         if (!h) continue
         const shares = Number(startingShares[sym] ?? 0)
@@ -261,46 +228,41 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
         }
       }
 
-      // Apply minimum threshold.
-      if (!Number.isFinite(dividendEarned) || dividendEarned < Number(rule.minimumAmount ?? 0)) {
-        return {
-          dividendEarned: Math.max(0, Number.isFinite(dividendEarned) ? dividendEarned : 0),
-          reinvestedAmount: 0,
-          sharesAdded: {},
-          endingShares: { ...startingShares },
-          nextWeekDividendEstimate: 0,
-        }
-      }
-
-      const reinvestedAmount = dividendEarned
-      const dest = effectiveDestination(rule, weekIndex)
-
-      let weights: Array<{ symbol: string; weight: number }> = []
-      if (dest.destinationType === 'SAME_AS_SOURCE') {
-        const total = Object.values(dividendBySymbol).reduce((s, v) => s + (Number(v) || 0), 0)
-        if (total > 0) {
-          weights = Object.entries(dividendBySymbol)
-            .filter(([, v]) => Number(v) > 0)
-            .map(([sym, v]) => ({ symbol: sym, weight: Number(v) / total }))
-        }
-      } else if (dest.destinationType === 'SINGLE_ASSET') {
-        const sym = String(dest.destinationAssets?.[0]?.symbol ?? '').trim().toUpperCase()
-        if (sym) weights = [{ symbol: sym, weight: 1 }]
-      } else {
-        weights = normalizeWeights(dest.destinationAssets ?? [])
-      }
-
+      // 2. Execute Plans (Simulate Buys)
+      let reinvestedAmount = 0
       const sharesAdded: TimelineShares = {}
-      for (const w of weights) {
-        const dollars = reinvestedAmount * w.weight
-        if (!Number.isFinite(dollars) || dollars <= 0) continue
-        const price = Number(priceBySymbol[w.symbol] ?? 100)
-        if (!Number.isFinite(price) || price <= 0) continue
 
-        let bought = dollars / price
-        if (!rule.fractionalSharesAllowed) bought = Math.floor(bought)
-        if (!Number.isFinite(bought) || bought <= 0) continue
-        sharesAdded[w.symbol] = (sharesAdded[w.symbol] ?? 0) + bought
+      for (const plan of activePlans) {
+        let multiplier = 0
+        if (plan.frequency === 'daily') multiplier = 5
+        else if (plan.frequency === 'weekly') multiplier = 1
+        else if (plan.frequency === 'monthly') multiplier = weekIndex === 1 ? 1 : 0
+
+        if (multiplier > 0) {
+          const price = priceBySymbol[plan.targetStock] || 100 // Fallback price
+          if (price > 0) {
+            let bought = 0
+            let costUsd = 0
+
+            if (plan.investmentType === 'QUANTITY') {
+              // Buy fixed number of shares
+              bought = plan.amount * multiplier
+              costUsd = bought * price
+            } else {
+              // Buy fixed amount of currency
+              let spendUsd = plan.amount * multiplier
+              if (plan.currency === 'KRW') {
+                spendUsd = spendUsd / 1450 // Approximate FX
+              }
+
+              bought = spendUsd / price
+              costUsd = spendUsd
+            }
+
+            sharesAdded[plan.targetStock] = (sharesAdded[plan.targetStock] ?? 0) + bought
+            reinvestedAmount += costUsd
+          }
+        }
       }
 
       const endingShares: TimelineShares = { ...startingShares }
@@ -308,7 +270,7 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
         endingShares[sym] = Number(endingShares[sym] ?? 0) + Number(inc ?? 0)
       }
 
-      // Next-week dividend estimate indicator (weekly-equivalent impact of added shares).
+      // Next-week dividend estimate
       let nextWeekDividendEstimate = 0
       for (const [sym, inc] of Object.entries(sharesAdded)) {
         const h = holdingsBySymbol[sym]
@@ -327,7 +289,7 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
         nextWeekDividendEstimate,
       }
     }
-  }, [rule, history, holdingsRows])
+  }, [plans, history, holdingsRows])
 
   if (isLoading) {
     return (
@@ -338,17 +300,7 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
     )
   }
 
-  if (error || !rule) {
-    return (
-      <section className="panel" aria-label={t('timeline.ariaLabel')}>
-        <h2>{t('timeline.summary.title')}</h2>
-        <p className="error" role="alert" aria-live="polite">
-          {error ?? t('timeline.errors.missingRule')}
-        </p>
-      </section>
-    )
-  }
-
+  // Pass null for reinvestmentRules since we use generator
   return (
     <ReinvestmentTimeline
       initialMonth={initialMY.month}
@@ -356,10 +308,9 @@ export default function ReinvestmentTimelineLive(props: { focusWeekIndex?: WeekI
       compoundingStartMonth={compoundingStartMonth}
       compoundingStartYear={compoundingStartYear}
       holdings={baselineHoldings}
-      reinvestmentRules={rule}
+      reinvestmentRules={null as any}
       reinvestmentExecutions={executionWeeks}
       generateWeeklyReinvestmentTimeline={generator}
-      focusWeekIndex={focusWeekIndex}
     />
   )
 }

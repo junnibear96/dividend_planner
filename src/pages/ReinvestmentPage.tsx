@@ -1,19 +1,13 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth'
-import ReinvestmentPanel from '../features/reinvestment/ReinvestmentPanel'
-import WeekTabs, { type WeekIndex } from '../features/reinvestment/WeekTabs'
-import type { ScheduleMode } from '../features/reinvestment/reinvestmentApi'
 import ReinvestmentTimelineLive from '../features/reinvestment/timeline/ReinvestmentTimelineLive'
+import CollectionPlansPanel from '../features/reinvestment/CollectionPlansPanel'
 
 export default function ReinvestmentPage() {
   const { user, setUser } = useAuth()
   const { t } = useTranslation()
   const navigate = useNavigate()
-
-  const [activeWeek, setActiveWeek] = useState<WeekIndex>(1)
-  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('WEEK_OF_MONTH')
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -50,19 +44,9 @@ export default function ReinvestmentPage() {
           </div>
         </header>
 
-        {scheduleMode === 'WEEK_OF_MONTH' ? (
-          <div className="modalTabs">
-            <WeekTabs value={activeWeek} onChange={setActiveWeek} />
-          </div>
-        ) : null}
+        <ReinvestmentTimelineLive />
 
-        <ReinvestmentTimelineLive focusWeekIndex={scheduleMode === 'WEEK_OF_MONTH' ? activeWeek : undefined} />
-
-        <ReinvestmentPanel
-          activeWeek={activeWeek}
-          onActiveWeekChange={setActiveWeek}
-          onScheduleModeChange={setScheduleMode}
-        />
+        <CollectionPlansPanel />
       </div>
     </div>
   )

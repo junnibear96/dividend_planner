@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { searchStockSymbols } from '../stock/stockApi'
+import { getStockCached, searchStockSymbols } from '../stock/stockApi'
 import SymbolAutocompleteInput from '../stock/SymbolAutocompleteInput'
 import { type DividendFrequency } from '../../utils/dividends'
 
@@ -109,6 +109,10 @@ export default function DividendPlanner({
     () => holdings.filter((h) => h.dividendFrequency === 'quarterly'),
     [holdings],
   )
+  const halfYearlyHoldings = useMemo(
+    () => holdings.filter((h) => h.dividendFrequency === 'half-yearly'),
+    [holdings],
+  )
   const yearlyHoldings = useMemo(
     () => holdings.filter((h) => h.dividendFrequency === 'yearly'),
     [holdings],
@@ -118,25 +122,28 @@ export default function DividendPlanner({
     const weekly = weeklyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
     const monthly = monthlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
     const quarterly = quarterlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
+    const halfYearly = halfYearlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
     const yearly = yearlyHoldings.reduce((sum, h) => sum + h.shares * h.dividendPerShare, 0)
-    return { weekly, monthly, quarterly, yearly }
-  }, [weeklyHoldings, monthlyHoldings, quarterlyHoldings, yearlyHoldings])
+    return { weekly, monthly, quarterly, halfYearly, yearly }
+  }, [weeklyHoldings, monthlyHoldings, quarterlyHoldings, halfYearlyHoldings, yearlyHoldings])
 
   const annualizedTotals = useMemo(() => {
     const annualWeekly = frequencyTotals.weekly * 4 * 12
     const annualMonthly = frequencyTotals.monthly * 12
     const annualQuarterly = frequencyTotals.quarterly * 4
+    const annualHalfYearly = frequencyTotals.halfYearly * 2
     const annualYearly = frequencyTotals.yearly
-    const total = annualWeekly + annualMonthly + annualQuarterly + annualYearly
-    return { annualWeekly, annualMonthly, annualQuarterly, annualYearly, total }
+    const total = annualWeekly + annualMonthly + annualQuarterly + annualHalfYearly + annualYearly
+    return { annualWeekly, annualMonthly, annualQuarterly, annualHalfYearly, annualYearly, total }
   }, [frequencyTotals])
 
   const totals = useMemo(() => {
     const yearly = annualizedTotals.total
+    const halfYearly = yearly / 2
     const quarterly = yearly / 4
     const monthly = yearly / 12
     const weekly = yearly / (4 * 12)
-    return { weekly, monthly, quarterly, yearly }
+    return { weekly, monthly, quarterly, halfYearly, yearly }
   }, [annualizedTotals])
 
   const reinvestCandidates = useMemo(() => {
@@ -153,9 +160,10 @@ export default function DividendPlanner({
       weekly: topSymbols(weeklyHoldings),
       monthly: topSymbols(monthlyHoldings),
       quarterly: topSymbols(quarterlyHoldings),
+      halfYearly: topSymbols(halfYearlyHoldings),
       yearly: topSymbols(yearlyHoldings),
     }
-  }, [weeklyHoldings, monthlyHoldings, quarterlyHoldings, yearlyHoldings])
+  }, [weeklyHoldings, monthlyHoldings, quarterlyHoldings, halfYearlyHoldings, yearlyHoldings])
 
   const parsedEditShares = toPositiveNumber(editShares)
   const parsedEditDividendPerShare = toPositiveNumber(editDividendPerShare)
@@ -201,12 +209,36 @@ export default function DividendPlanner({
 
     const controller = new AbortController()
     const t = window.setTimeout(() => {
+      // 1. Search suggestions
       void searchStockSymbols(q, 10, controller.signal)
         .then(setSymbolSuggestions)
         .catch((err: unknown) => {
           if (err instanceof DOMException && err.name === 'AbortError') return
           setSymbolSuggestions([])
         })
+
+      // 2. Auto-detect frequency
+      // Only if it looks like a complete symbol (e.g. 3+ chars) to avoid spamming 404s
+      if (q.length >= 3) {
+        void getStockCached(q)
+          .then((data) => {
+            if (data.dividendFrequency) {
+              const lower = data.dividendFrequency.toLowerCase()
+              if (
+                lower === 'weekly' ||
+                lower === 'monthly' ||
+                lower === 'quarterly' ||
+                lower === 'half-yearly' ||
+                lower === 'yearly'
+              ) {
+                setDividendFrequency(lower as DividendFrequency)
+              }
+            }
+          })
+          .catch(() => {
+            // ignore
+          })
+      }
     }, 200)
 
     return () => {
@@ -449,6 +481,10 @@ export default function DividendPlanner({
             <div className="summaryValue">{formatMoney(totals.yearly)}</div>
           </div>
           <div className="summaryCard">
+            <div className="summaryKey">{t('planner.summary.halfYearly')}</div>
+            <div className="summaryValue">{formatMoney(totals.halfYearly)}</div>
+          </div>
+          <div className="summaryCard">
             <div className="summaryKey">{t('planner.summary.quarterly')}</div>
             <div className="summaryValue">{formatMoney(totals.quarterly)}</div>
           </div>
@@ -501,9 +537,8 @@ export default function DividendPlanner({
               >
                 <option value="weekly">{t('planner.add.frequency.weekly')}</option>
                 <option value="monthly">{t('planner.add.frequency.monthly')}</option>
-                <option value="weekly">{t('planner.add.frequency.weekly')}</option>
-                <option value="monthly">{t('planner.add.frequency.monthly')}</option>
                 <option value="quarterly">{t('planner.add.frequency.quarterly')}</option>
+                <option value="half-yearly">{t('planner.add.frequency.halfYearly')}</option>
                 <option value="yearly">{t('planner.add.frequency.yearly')}</option>
               </select>
             </div>
@@ -560,7 +595,16 @@ export default function DividendPlanner({
                 <tbody>
                   {weeklyHoldings.map((h) => (
                     <tr key={h.id}>
-                      <td className="mono">{h.symbol}</td>
+                      <td className="mono">
+                        <a
+                          href={`/stock?symbol=${h.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+                        >
+                          {h.symbol}
+                        </a>
+                      </td>
                       <td className="num">{h.shares}</td>
                       <td className="num">{formatMoney(h.dividendPerShare)}</td>
                       <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
@@ -637,7 +681,16 @@ export default function DividendPlanner({
                 <tbody>
                   {monthlyHoldings.map((h) => (
                     <tr key={h.id}>
-                      <td className="mono">{h.symbol}</td>
+                      <td className="mono">
+                        <a
+                          href={`/stock?symbol=${h.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+                        >
+                          {h.symbol}
+                        </a>
+                      </td>
                       <td className="num">{h.shares}</td>
                       <td className="num">{formatMoney(h.dividendPerShare)}</td>
                       <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
@@ -714,7 +767,16 @@ export default function DividendPlanner({
                 <tbody>
                   {quarterlyHoldings.map((h) => (
                     <tr key={h.id}>
-                      <td className="mono">{h.symbol}</td>
+                      <td className="mono">
+                        <a
+                          href={`/stock?symbol=${h.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+                        >
+                          {h.symbol}
+                        </a>
+                      </td>
                       <td className="num">{h.shares}</td>
                       <td className="num">{formatMoney(h.dividendPerShare)}</td>
                       <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
@@ -766,6 +828,92 @@ export default function DividendPlanner({
       </section>
 
       <section className="panel">
+        <h2>{t('planner.sections.halfYearlyTitle')}</h2>
+        {isLoading ? (
+          <p className="empty">{t('planner.table.loading')}</p>
+        ) : halfYearlyHoldings.length === 0 ? (
+          <p className="empty">{t('planner.table.emptyHalfYearly')}</p>
+        ) : (
+          <>
+            <p className="hint">
+              {t('planner.table.reinvestCandidates')}: {reinvestCandidates.halfYearly.length ? reinvestCandidates.halfYearly.join(', ') : '—'}
+            </p>
+            <div className="tableWrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t('planner.table.symbol')}</th>
+                    <th className="num">{t('planner.table.shares')}</th>
+                    <th className="num">{t('planner.table.dividendPerShare')}</th>
+                    <th className="num">{t('planner.table.income')}</th>
+                    <th className="num">{t('planner.table.includeInReinvestment')}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {halfYearlyHoldings.map((h) => (
+                    <tr key={h.id}>
+                      <td className="mono">
+                        <a
+                          href={`/stock?symbol=${h.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+                        >
+                          {h.symbol}
+                        </a>
+                      </td>
+                      <td className="num">{h.shares}</td>
+                      <td className="num">{formatMoney(h.dividendPerShare)}</td>
+                      <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
+                      <td className="num">
+                        <input
+                          type="checkbox"
+                          checked={normalizeIncludeFlag(h)}
+                          onChange={(e) => void toggleIncludeInReinvestment(h, e.target.checked)}
+                          disabled={!canWrite}
+                          aria-label={`Include ${h.symbol} in reinvestment`}
+                        />
+                      </td>
+                      <td className="num">
+                        <button
+                          type="button"
+                          className="linkButton"
+                          onClick={() => openEdit(h)}
+                          disabled={!canWrite}
+                        >
+                          {t('planner.table.edit')}
+                        </button>
+                        <span aria-hidden="true">&nbsp;&nbsp;</span>
+                        <button
+                          type="button"
+                          className="linkButton"
+                          onClick={() => removeHolding(h.id)}
+                          disabled={!canWrite}
+                        >
+                          {t('planner.table.remove')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="totalsLabel">
+                      {t('planner.table.totalLabel')}
+                    </td>
+                    <td className="num totalsValue">{formatMoney(frequencyTotals.halfYearly)}</td>
+                    <td />
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
         <h2>{t('planner.sections.yearlyTitle')}</h2>
         {isLoading ? (
           <p className="empty">{t('planner.table.loading')}</p>
@@ -791,7 +939,16 @@ export default function DividendPlanner({
                 <tbody>
                   {yearlyHoldings.map((h) => (
                     <tr key={h.id}>
-                      <td className="mono">{h.symbol}</td>
+                      <td className="mono">
+                        <a
+                          href={`/stock?symbol=${h.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+                        >
+                          {h.symbol}
+                        </a>
+                      </td>
                       <td className="num">{h.shares}</td>
                       <td className="num">{formatMoney(h.dividendPerShare)}</td>
                       <td className="num">{formatMoney(h.shares * h.dividendPerShare)}</td>
@@ -856,6 +1013,7 @@ export default function DividendPlanner({
                   <th className="num">{t('planner.annualizedTable.weeklyTotal')}</th>
                   <th className="num">{t('planner.annualizedTable.monthlyTotal')}</th>
                   <th className="num">{t('planner.annualizedTable.quarterlyTotal')}</th>
+                  <th className="num">{t('planner.annualizedTable.halfYearlyTotal')}</th>
                   <th className="num">{t('planner.annualizedTable.yearlyTotal')}</th>
                   <th className="num">{t('planner.annualizedTable.total')}</th>
                 </tr>
@@ -865,6 +1023,7 @@ export default function DividendPlanner({
                   <td className="num">{formatMoney(annualizedTotals.annualWeekly)}</td>
                   <td className="num">{formatMoney(annualizedTotals.annualMonthly)}</td>
                   <td className="num">{formatMoney(annualizedTotals.annualQuarterly)}</td>
+                  <td className="num">{formatMoney(annualizedTotals.annualHalfYearly)}</td>
                   <td className="num">{formatMoney(annualizedTotals.annualYearly)}</td>
                   <td className="num">{formatMoney(annualizedTotals.total)}</td>
                 </tr>

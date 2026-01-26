@@ -23,6 +23,7 @@ export type StockApiResponse = {
   realtime: unknown
   eod: StockApiEodRow[]
   dividends: StockApiDividendRow[]
+  dividendFrequency: string | null
 }
 
 async function jsonOrError(res: Response) {

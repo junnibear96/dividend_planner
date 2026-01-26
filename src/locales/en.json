@@ -170,6 +170,7 @@
         "summary": {
             "title": "Estimated totals",
             "yearly": "Yearly",
+            "halfYearly": "Half-yearly",
             "quarterly": "Quarterly",
             "monthly": "Monthly",
             "weekly": "Weekly"
@@ -186,6 +187,7 @@
                 "weekly": "Weekly",
                 "monthly": "Monthly",
                 "quarterly": "Quarterly",
+                "halfYearly": "Half-yearly",
                 "yearly": "Yearly"
             },
             "submit": "Add holding",
@@ -195,6 +197,7 @@
             "weeklyTitle": "Weekly dividend income",
             "monthlyTitle": "Monthly dividend income",
             "quarterlyTitle": "Quarterly dividend income",
+            "halfYearlyTitle": "Half-yearly dividend income",
             "yearlyTitle": "Yearly dividend income",
             "totalTitle": "Total dividend (annualized estimate)"
         },
@@ -204,6 +207,7 @@
             "emptyWeekly": "No weekly dividend holdings.",
             "emptyMonthly": "No monthly dividend holdings.",
             "emptyQuarterly": "No quarterly dividend holdings.",
+            "emptyHalfYearly": "No half-yearly dividend holdings.",
             "emptyYearly": "No yearly dividend holdings.",
             "reinvestCandidates": "Reinvest candidates",
             "symbol": "Symbol",
@@ -219,6 +223,7 @@
             "weeklyTotal": "Weekly total",
             "monthlyTotal": "Monthly total",
             "quarterlyTotal": "Quarterly total",
+            "halfYearlyTotal": "Half-yearly total",
             "yearlyTotal": "Yearly total",
             "total": "Total"
         }
@@ -235,11 +240,20 @@
         "refresh": "Refresh",
         "reset": "Reset",
         "save": "Save",
+        "add": "Add",
         "addAsset": "Add asset",
         "remove": "Remove",
+        "symbol": "Symbol",
+        "frequency": "Frequency",
+        "amount": "Amount",
         "errors": {
             "positiveNumbers": "Please enter valid positive numbers."
         }
+    },
+    "frequency": {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly"
     },
     "symbols": {
         "title": "All stocks (EODHD)",
@@ -350,6 +364,10 @@
             "loadSummaryFailed": "Failed to load reinvestment summary",
             "loadHistoryFailed": "Failed to load reinvestment history",
             "updateFailed": "Failed to update reinvestment rule"
+        },
+        "collectionPlans": {
+            "title": "Stock Gathering",
+            "empty": "No gathering plans yet. Start now!"
         }
     },
     "timeline": {

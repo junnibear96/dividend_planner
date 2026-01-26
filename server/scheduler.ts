@@ -47,15 +47,22 @@ async function updateRealTimeData(pool: mysql.Pool) {
 
     try {
         // 1. Get all symbols from eodhd_exchange_symbols
-        const [rows] = await pool.query<mysql.RowDataPacket[]>('SELECT symbol FROM eodhd_exchange_symbols')
+        // Join with stock_realtime to check fetched_at. Also include symbols not in stock_realtime yet.
+        const [rows] = await pool.query<mysql.RowDataPacket[]>(`
+            SELECT s.symbol 
+            FROM eodhd_exchange_symbols s
+            LEFT JOIN stock_realtime r ON s.symbol = r.symbol
+            WHERE r.fetched_at IS NULL 
+               OR r.fetched_at < DATE_SUB(NOW(), INTERVAL 12 HOUR)
+        `)
         const allSymbols = (rows as unknown as { symbol: string }[]).map(r => r.symbol).filter(Boolean)
 
         if (allSymbols.length === 0) {
-            console.log('[Scheduler] No symbols found in eodhd_exchange_symbols.')
+            console.log('[Scheduler] No stale symbols found to update (checked > 12h).')
             return
         }
 
-        console.log(`[Scheduler] Found ${allSymbols.length} symbols to update.`)
+        console.log(`[Scheduler] Found ${allSymbols.length} stale symbols to update (> 12h old).`)
 
         // 2. Chunk and fetch
         // User requested limit: ~900 symbols per minute.
@@ -93,8 +100,8 @@ async function updateRealTimeData(pool: mysql.Pool) {
                 // Handle 402 specifically
                 const msg = err instanceof Error ? err.message : String(err)
                 if (msg.includes('402')) {
-                    console.warn(`[Scheduler] 402 Payment Required for chunk ${i}-${i + CHUNK_SIZE}. Aborting remaining updates for this cycle.`)
-                    break // Stop processing
+                    console.log(`[Scheduler] API Limit Reached (402). Pausing real-time updates for this cycle.`)
+                    break // Stop processing this cycle gracefully
                 } else {
                     console.error(`[Scheduler] Error fetching chunk ${i}-${i + CHUNK_SIZE}:`, err)
                 }
@@ -116,10 +123,10 @@ export function startScheduler(pool: mysql.Pool) {
 
     void updateRealTimeData(pool)
 
-    const INTERVAL_MS = 6 * 60 * 60 * 1000
+    const INTERVAL_MS = 12 * 60 * 60 * 1000
     setInterval(() => {
         void updateRealTimeData(pool)
     }, INTERVAL_MS)
 
-    console.log(`[Scheduler] Initialized (interval: 6h)`)
+    console.log(`[Scheduler] Initialized (interval: 12h)`)
 }

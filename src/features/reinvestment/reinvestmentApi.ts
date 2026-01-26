@@ -99,3 +99,88 @@ export async function fetchReinvestmentHistory(
   }
   return (await res.json()) as { executions: ReinvestmentExecution[] }
 }
+
+export type DividendEvent = {
+  symbol: string
+  date: string
+  value: number
+}
+
+export async function fetchReinvestmentSimulationEvents(): Promise<{ events: DividendEvent[] }> {
+  const res = await fetch('/api/reinvestment/simulation-events')
+  if (!res.ok) {
+    const body = (await jsonOrNull(res)) as { error?: string } | null
+    throw new Error(body?.error ?? `Failed to load dividend events (${res.status})`)
+  }
+  return (await res.json()) as { events: DividendEvent[] }
+}
+
+// Collection Plans Types
+export type CollectionPlanFrequency = 'daily' | 'weekly' | 'monthly'
+export type CollectionPlanStatus = 'ACTIVE' | 'PAUSED'
+export type InvestmentType = 'AMOUNT' | 'QUANTITY'
+export type Currency = 'USD' | 'KRW'
+
+export type CollectionPlan = {
+  id: number
+  userId: string
+  targetStock: string
+  frequency: CollectionPlanFrequency
+  investmentType: InvestmentType
+  currency: Currency
+  amount: number
+  autoDeposit: boolean
+  startDate: string // YYYY-MM-DD
+  status: CollectionPlanStatus
+  createdAt: string
+}
+
+export async function fetchCollectionPlans(): Promise<CollectionPlan[]> {
+  const res = await fetch('/api/plans')
+  if (!res.ok) {
+    const body = (await jsonOrNull(res)) as { error?: string } | null
+    throw new Error(body?.error ?? `Failed to load collection plans (${res.status})`)
+  }
+  const data = (await res.json()) as { plans: CollectionPlan[] }
+  return data.plans
+}
+
+export async function createCollectionPlan(
+  plan: Pick<CollectionPlan, 'targetStock' | 'frequency' | 'investmentType' | 'currency' | 'amount' | 'autoDeposit' | 'startDate'>
+): Promise<CollectionPlan> {
+  const res = await fetch('/api/plans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(plan),
+  })
+  if (!res.ok) {
+    const body = (await jsonOrNull(res)) as { error?: string } | null
+    throw new Error(body?.error ?? `Failed to create collection plan (${res.status})`)
+  }
+  return (await res.json()) as CollectionPlan
+}
+
+export async function updateCollectionPlan(
+  planId: number,
+  updates: Partial<Pick<CollectionPlan, 'amount' | 'status' | 'frequency'>>
+): Promise<void> {
+  const res = await fetch(`/api/plans/${encodeURIComponent(String(planId))}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  if (!res.ok) {
+    const body = (await jsonOrNull(res)) as { error?: string } | null
+    throw new Error(body?.error ?? `Failed to update collection plan (${res.status})`)
+  }
+}
+
+export async function deleteCollectionPlan(planId: number): Promise<void> {
+  const res = await fetch(`/api/plans/${encodeURIComponent(String(planId))}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const body = (await jsonOrNull(res)) as { error?: string } | null
+    throw new Error(body?.error ?? `Failed to delete collection plan (${res.status})`)
+  }
+}

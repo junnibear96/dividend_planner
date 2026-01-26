@@ -12,6 +12,12 @@ import {
   processPortfolioForReinvestment,
   updateReinvestmentRule,
 } from './reinvestment'
+import {
+  createCollectionPlan,
+  listCollectionPlans,
+  updateCollectionPlan,
+  deleteCollectionPlan,
+} from './collection_plan'
 import { startScheduler } from './scheduler'
 
 // Always load the repo-root `.env` (even if the server is started from `server/`).
@@ -23,7 +29,7 @@ type HoldingRow = {
   symbol: string
   shares: number
   dividendPerShare: number
-  dividendFrequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+  dividendFrequency: 'weekly' | 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
   includeInReinvestment: boolean
   createdAt: string
 }
@@ -154,6 +160,81 @@ async function fetchExchangeSymbolsFromEodhd(exchange: string): Promise<unknown[
   return Array.isArray(rows) ? (rows as unknown[]) : []
 }
 
+async function getDividendMetadata(symbols: string[]): Promise<
+  Record<
+    string,
+    {
+      dividendFrequency: string | null
+      dividendPerShare: number | null
+    }
+  >
+> {
+  const unique = Array.from(new Set(symbols.map((s) => toSymbol(s)).filter(Boolean)))
+  if (unique.length === 0) return {}
+
+  const params: Record<string, unknown> = {}
+  const names: string[] = []
+  unique.forEach((s, idx) => {
+    const key = `s${idx}`
+    params[key] = s
+    names.push(`:${key}`)
+  })
+
+  // 1. Get frequency from eodhd_exchange_symbols
+  const [freqRows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT symbol, dividend_frequency
+     FROM eodhd_exchange_symbols
+     WHERE symbol IN (${names.join(', ')})`,
+    params,
+  )
+
+  const out: Record<
+    string,
+    {
+      dividendFrequency: string | null
+      dividendPerShare: number | null
+    }
+  > = {}
+
+  for (const r of freqRows as unknown as Array<{ symbol?: unknown; dividend_frequency?: unknown }>) {
+    const s = toSymbol(r.symbol)
+    if (s) {
+      out[s] = {
+        dividendFrequency: typeof r.dividend_frequency === 'string' ? r.dividend_frequency : null,
+        dividendPerShare: null,
+      }
+    }
+  }
+
+  // 2. Get latest dividend value from stock_dividends
+  const [divRows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT symbol, value, date
+     FROM stock_dividends
+     WHERE symbol IN (${names.join(', ')})
+     ORDER BY date DESC`,
+    params,
+  )
+
+  const visitedDiv = new Set<string>()
+  for (const r of divRows as unknown as Array<{ symbol?: unknown; value?: unknown; date?: unknown }>) {
+    const s = toSymbol(r.symbol)
+    if (!s || visitedDiv.has(s)) continue
+
+    visitedDiv.add(s)
+    const val = Number(r.value)
+    if (!out[s]) {
+      out[s] = { dividendFrequency: null, dividendPerShare: null }
+    }
+    if (Number.isFinite(val)) {
+      out[s].dividendPerShare = val
+    }
+  }
+
+  return out
+}
+
+
+
 async function ensureSchema() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS users (
@@ -210,6 +291,52 @@ async function ensureSchema() {
   )
 
   await pool.execute(
+    `CREATE TABLE IF NOT EXISTS collection_plans (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id CHAR(36) NOT NULL,
+      target_stock VARCHAR(16) NOT NULL,
+      frequency VARCHAR(16) NOT NULL,
+      investment_type VARCHAR(16) NOT NULL DEFAULT 'AMOUNT',
+      currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+      amount DECIMAL(18,6) NOT NULL,
+      auto_deposit TINYINT(1) NOT NULL DEFAULT 1,
+      start_date DATE NOT NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_plans_user (user_id),
+      INDEX idx_plans_status (status)
+    )`,
+  )
+
+  // Migrate collection_plans for new columns (Kakao-style)
+  const [planCols] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT
+      SUM(CASE WHEN column_name = 'investment_type' THEN 1 ELSE 0 END) AS hasType,
+      SUM(CASE WHEN column_name = 'currency' THEN 1 ELSE 0 END) AS hasCurrency,
+      SUM(CASE WHEN column_name = 'auto_deposit' THEN 1 ELSE 0 END) AS hasAutoDeposit
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'collection_plans'`,
+  )
+  const planFlags = planCols[0] as unknown as { hasType: number; hasCurrency: number; hasAutoDeposit: number }
+
+  if (!Number(planFlags.hasType)) {
+    await pool.execute(
+      `ALTER TABLE collection_plans ADD COLUMN investment_type VARCHAR(16) NOT NULL DEFAULT 'AMOUNT' AFTER frequency`
+    )
+  }
+  if (!Number(planFlags.hasCurrency)) {
+    await pool.execute(
+      `ALTER TABLE collection_plans ADD COLUMN currency VARCHAR(8) NOT NULL DEFAULT 'USD' AFTER amount`
+    )
+  }
+  if (!Number(planFlags.hasAutoDeposit)) {
+    await pool.execute(
+      `ALTER TABLE collection_plans ADD COLUMN auto_deposit TINYINT(1) NOT NULL DEFAULT 1 AFTER currency`
+    )
+  }
+
+  await pool.execute(
     `CREATE TABLE IF NOT EXISTS eodhd_exchange_symbols (
       exchange VARCHAR(16) NOT NULL,
       symbol VARCHAR(32) NOT NULL,
@@ -222,6 +349,22 @@ async function ensureSchema() {
       INDEX idx_eodhd_symbols_exchange_name (exchange, name)
     )`,
   )
+
+  // Ensure dividend_frequency column exists
+  const [eodhdDivFreqCol] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = 'eodhd_exchange_symbols'
+       AND column_name = 'dividend_frequency'`,
+  )
+  const hasEodhdDivFreq = Number((eodhdDivFreqCol[0] as { count: number }).count) > 0
+  if (!hasEodhdDivFreq) {
+    await pool.execute(
+      `ALTER TABLE eodhd_exchange_symbols
+       ADD COLUMN dividend_frequency VARCHAR(16) NULL AFTER currency`,
+    )
+  }
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS eodhd_fundamentals (
@@ -1270,7 +1413,13 @@ app.get('/api/stocks/:symbol', async (req, res) => {
       dividends = await loadStockDividends(symbol, dividendsLimit)
     }
 
-    res.json({ symbol, source, realtime, eod, dividends })
+    const [freqRows] = await pool.query<mysql.RowDataPacket[]>(
+      'SELECT dividend_frequency FROM eodhd_exchange_symbols WHERE symbol = :symbol LIMIT 1',
+      { symbol },
+    )
+    const dividendFrequency = (freqRows[0] as { dividend_frequency?: string } | undefined)?.dividend_frequency ?? null
+
+    res.json({ symbol, source, realtime, eod, dividends, dividendFrequency })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
@@ -1424,11 +1573,16 @@ app.get('/api/holdings', async (req, res) => {
     const combined: HoldingRow[] = []
     const processedSymbols = new Set<string>()
 
+    // Collect all portfolio symbols to fetch metadata
+    const neededSymbols = new Set<string>()
+    for (const p of portfolioPositions) {
+      neededSymbols.add(toSymbol(p.symbol))
+    }
+    const divMetadata = await getDividendMetadata(Array.from(neededSymbols))
+
     // Priority 1: Portfolio Positions
     for (const p of portfolioPositions) {
       const sym = toSymbol(p.symbol)
-      processedSymbols.add(sym)
-
       const matched = holdingMap.get(sym)
       if (matched) {
         // Exists in both. Use Holding ID (UUID) for editing, but Portfolio Amount for shares.
@@ -1439,12 +1593,27 @@ app.get('/api/holdings', async (req, res) => {
         })
       } else {
         // Only in Portfolio. Create a "virtual" holding.
+        const meta = divMetadata[sym]
+        let frequency: any = 'yearly' // Default
+        if (meta?.dividendFrequency) {
+          const lower = meta.dividendFrequency.toLowerCase()
+          if (
+            lower === 'weekly' ||
+            lower === 'monthly' ||
+            lower === 'quarterly' ||
+            lower === 'half-yearly' ||
+            lower === 'yearly'
+          ) {
+            frequency = lower
+          }
+        }
+
         combined.push({
           id: String(p.id), // INT ID (stringified)
           symbol: sym,
           shares: Number(p.amount),
-          dividendPerShare: 0,
-          dividendFrequency: 'yearly', // Default
+          dividendPerShare: meta?.dividendPerShare ?? 0,
+          dividendFrequency: frequency,
           includeInReinvestment: true,
           createdAt: new Date().toISOString(), // Mock
         })
@@ -1541,51 +1710,50 @@ app.post('/api/portfolio', async (req, res) => {
       return
     }
 
-    const id = randomUUID()
+
 
     try {
-      await pool.execute(
+      const [result] = await pool.execute<mysql.ResultSetHeader>(
         `INSERT INTO portfolio_positions (
-          id,
           user_id,
           symbol,
           amount,
           buy_price
         ) VALUES (
-          :id,
           :userId,
           :symbol,
           :amount,
           :buyPrice
         )`,
-        { id, userId: user.id, symbol, amount, buyPrice },
+        { userId: user.id, symbol, amount, buyPrice },
       )
+
+      const insertId = result.insertId
+
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT
+          id,
+          symbol,
+          amount,
+          buy_price AS buyPrice,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM portfolio_positions
+        WHERE id = :id AND user_id = :userId`,
+        { id: insertId, userId: user.id },
+      )
+
+      const position = rows[0] as unknown as PortfolioPositionRow | undefined
+      res.status(201).json({
+        position: position ? { ...position, symbol: toSymbol(position.symbol) } : undefined,
+      })
     } catch (err) {
-      // If the user already has this symbol, return a friendly error.
       if (err && typeof err === 'object' && 'code' in err && (err as any).code === 'ER_DUP_ENTRY') {
         res.status(409).json({ error: 'Symbol already exists in your portfolio' })
         return
       }
-      throw err
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
     }
-
-    const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      `SELECT
-        id,
-        symbol,
-        amount,
-        buy_price AS buyPrice,
-        created_at AS createdAt,
-        updated_at AS updatedAt
-      FROM portfolio_positions
-      WHERE id = :id AND user_id = :userId`,
-      { id, userId: user.id },
-    )
-
-    const position = rows[0] as unknown as PortfolioPositionRow | undefined
-    res.status(201).json({
-      position: position ? { ...position, symbol: toSymbol(position.symbol) } : undefined,
-    })
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
@@ -1786,6 +1954,7 @@ app.post('/api/holdings', async (req, res) => {
       dividendFrequency !== 'weekly' &&
       dividendFrequency !== 'monthly' &&
       dividendFrequency !== 'quarterly' &&
+      dividendFrequency !== 'half-yearly' &&
       dividendFrequency !== 'yearly'
     ) {
       res.status(400).json({ error: 'Dividend frequency must be weekly, monthly, or yearly' })
@@ -2005,6 +2174,51 @@ app.put('/api/reinvestment/rule', async (req, res) => {
     })
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Bad request' })
+  }
+})
+
+// Collection Plans Routes
+app.post('/api/plans', async (req, res) => {
+  try {
+    const user = readSession(req)
+    if (!user) { res.status(401).json({ error: 'Not authenticated' }); return }
+    const plan = await createCollectionPlan(pool, user.id, req.body)
+    res.json(plan)
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.get('/api/plans', async (req, res) => {
+  try {
+    const user = readSession(req)
+    if (!user) { res.status(401).json({ error: 'Not authenticated' }); return }
+    const plans = await listCollectionPlans(pool, user.id)
+    res.json({ plans })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.patch('/api/plans/:id', async (req, res) => {
+  try {
+    const user = readSession(req)
+    if (!user) { res.status(401).json({ error: 'Not authenticated' }); return }
+    await updateCollectionPlan(pool, user.id, req.params.id, req.body)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.delete('/api/plans/:id', async (req, res) => {
+  try {
+    const user = readSession(req)
+    if (!user) { res.status(401).json({ error: 'Not authenticated' }); return }
+    await deleteCollectionPlan(pool, user.id, req.params.id)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
 })
 
@@ -2604,7 +2818,7 @@ app.post('/api/watchlist/refresh', async (req, res) => {
 const init = async () => {
   try {
     await ensureSchema()
-    app.listen(port, () => {
+    app.listen(port, '0.0.0.0', () => {
       console.log(`API listening on http://localhost:${port}`)
       startScheduler(pool)
     })

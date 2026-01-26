@@ -137,6 +137,7 @@ export default function StockPage() {
   const [realTimeRaw, setRealTimeRaw] = useState<unknown>(null)
   const [eod, setEod] = useState<PricePoint[]>([])
   const [dividends, setDividends] = useState<DividendViewRow[]>([])
+  const [dividendFrequency, setDividendFrequency] = useState<string | null>(null)
 
   const [stockSearch, setStockSearch] = useState('')
   const [stockSearchSuggestions, setStockSearchSuggestions] = useState<string[]>([])
@@ -214,7 +215,9 @@ export default function StockPage() {
       setError(null)
       setRealTimeRaw(null)
       setEod([])
+      setEod([])
       setDividends([])
+      setDividendFrequency(null)
       return () => {
         cancelled = true
       }
@@ -246,6 +249,7 @@ export default function StockPage() {
           .map((r) => ({ date: r.date, value: r.value }))
           .sort((a, b) => b.date.localeCompare(a.date))
         setDividends(div)
+        setDividendFrequency(data.dividendFrequency)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load stock data')
@@ -497,6 +501,18 @@ export default function StockPage() {
                   <div className="statLabel">{t('stock.dividends.yield')}</div>
                   <div className="divValue">
                     {typeof dividendYield === 'number' ? `${dividendYield.toFixed(2)}%` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="statLabel">{t('stock.dividends.yield')}</div>
+                  <div className="divValue">
+                    {typeof dividendYield === 'number' ? `${dividendYield.toFixed(2)}%` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="statLabel">Frequency</div>
+                  <div className="divValue">
+                    {dividendFrequency ? dividendFrequency : '—'}
                   </div>
                 </div>
               </div>

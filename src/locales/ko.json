@@ -170,6 +170,7 @@
         "summary": {
             "title": "예상 총계",
             "yearly": "연간",
+            "halfYearly": "반기",
             "quarterly": "분기",
             "monthly": "월간",
             "weekly": "주간"
@@ -186,6 +187,7 @@
                 "weekly": "매주",
                 "monthly": "매월",
                 "quarterly": "매분기",
+                "halfYearly": "반기",
                 "yearly": "매년"
             },
             "submit": "추가",
@@ -195,6 +197,7 @@
             "weeklyTitle": "주간 배당 수입",
             "monthlyTitle": "월간 배당 수입",
             "quarterlyTitle": "분기별 배당 수입",
+            "halfYearlyTitle": "반기 배당 수입",
             "yearlyTitle": "연간 배당 수입",
             "totalTitle": "총 배당금 (연환산 추정치)"
         },
@@ -204,6 +207,7 @@
             "emptyWeekly": "주간 배당 종목이 없습니다.",
             "emptyMonthly": "월간 배당 종목이 없습니다.",
             "emptyQuarterly": "분기별 배당 종목이 없습니다.",
+            "emptyHalfYearly": "반기 배당 종목이 없습니다.",
             "emptyYearly": "연간 배당 종목이 없습니다.",
             "reinvestCandidates": "재투자 후보",
             "symbol": "주식 종목",
@@ -219,6 +223,7 @@
             "weeklyTotal": "주간 합계",
             "monthlyTotal": "월간 합계",
             "quarterlyTotal": "분기 합계",
+            "halfYearlyTotal": "반기 합계",
             "yearlyTotal": "연간 합계",
             "total": "총계"
         }
@@ -235,11 +240,20 @@
         "refresh": "새로고침",
         "reset": "초기화",
         "save": "저장",
+        "add": "추가",
         "addAsset": "자산 추가",
         "remove": "삭제",
+        "symbol": "종목",
+        "frequency": "주기",
+        "amount": "금액",
         "errors": {
             "positiveNumbers": "유효한 양수를 입력해주세요."
         }
+    },
+    "frequency": {
+        "daily": "매일",
+        "weekly": "매주",
+        "monthly": "매월"
     },
     "symbols": {
         "title": "전체 주식 (EODHD)",
@@ -350,6 +364,10 @@
             "loadSummaryFailed": "요약 정보를 불러오지 못했습니다",
             "loadHistoryFailed": "내역을 불러오지 못했습니다",
             "updateFailed": "설정 업데이트 실패"
+        },
+        "collectionPlans": {
+            "title": "주식 모으기",
+            "empty": "아직 모으는 주식이 없습니다. 시작해보세요!"
         }
     },
     "timeline": {
