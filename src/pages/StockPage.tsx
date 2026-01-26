@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import {
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+
 import { parseYyyyMmDd } from '../features/stock/eodhd'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
 import { getStockCached, searchStockSymbols } from '../features/stock/stockApi'

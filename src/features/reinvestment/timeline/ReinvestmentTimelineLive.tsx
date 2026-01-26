@@ -127,7 +127,7 @@ function weeklyEquivalentDividendPerShare(h: PlannerHolding): number {
 export default function ReinvestmentTimelineLive() {
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = useState<string | null>(null)
 
   const [holdingsRows, setHoldingsRows] = useState<PlannerHolding[]>([])
   const [history, setHistory] = useState<ReinvestmentExecution[]>([])

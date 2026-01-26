@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import MonthYearHeader, { type MonthYear } from './MonthYearHeader'
-import { monthLabel, type MonthNumber } from './dateUtils'
+import { type MonthNumber } from './dateUtils'
 import { buildMonthlyTimeline } from './buildMonthlyTimeline'
 import type { GenerateWeeklyReinvestmentTimeline, Holdings, ReinvestmentExecutionWeek, TimelineShares, WeeklySlice } from './types'
 import type { WeekIndex } from '../WeekTabs'

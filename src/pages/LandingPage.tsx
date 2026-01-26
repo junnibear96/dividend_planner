@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth'
 import DividendPlanner, { type PlannerHolding, type UpdateHoldingInput } from '../features/planner/DividendPlanner'
-import PortfolioSummary from './PortfolioSummary'
 
 function createId() {
   const c = globalThis.crypto
@@ -16,19 +15,6 @@ export default function LandingPage() {
   const { user, isAuthLoading } = useAuth()
   const navigate = useNavigate()
   const [stockSearch, setStockSearch] = useState('')
-  const [guestCash, setGuestCash] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('guest_cash_balance')
-      return saved ? Number(saved) : 0
-    } catch {
-      return 0
-    }
-  })
-
-  function updateGuestCash(val: number) {
-    setGuestCash(val)
-    localStorage.setItem('guest_cash_balance', String(val))
-  }
 
   useEffect(() => {
     if (!isAuthLoading && user) {

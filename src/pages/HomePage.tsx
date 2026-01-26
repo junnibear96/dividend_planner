@@ -395,7 +395,6 @@ export default function HomePage() {
       setRowSavingId(id)
       // 1. Update Cash
       const proceed = price * amount
-      const currentCash = (await getPortfolioCache()) ? 0 : 0 // We need getCashBalance here actually, but we can just use updateCashBalance if we knew the current... 
       // Actually, my API `updateCashBalance` sets the absolute value. 
       // I need to fetch current, add, then set.
       // But `PortfolioSummary` manages its own state... we should probably use the imported `getCashBalance` here.

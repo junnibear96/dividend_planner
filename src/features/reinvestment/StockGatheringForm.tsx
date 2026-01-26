@@ -1,6 +1,6 @@
 
 import { useState, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
+
 import {
     createCollectionPlan,
     type CollectionPlanFrequency,
@@ -14,15 +14,13 @@ type Props = {
 }
 
 export default function StockGatheringForm({ onSuccess, onCancel }: Props) {
-    const { t } = useTranslation()
-
     // Form State
     const [targetStock, setTargetStock] = useState('')
     const [frequency, setFrequency] = useState<CollectionPlanFrequency>('daily')
     const [investmentType, setInvestmentType] = useState<InvestmentType>('AMOUNT')
     const [currency, setCurrency] = useState<Currency>('USD')
     const [amount, setAmount] = useState<string>('')
-    const [autoDeposit, setAutoDeposit] = useState(true)
+    const [autoDeposit] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -37,10 +35,6 @@ export default function StockGatheringForm({ onSuccess, onCancel }: Props) {
 
         const amtVal = parseFloat(amount)
         const displayAmount = isNaN(amtVal) ? '0' : amtVal.toLocaleString()
-
-        const unit = investmentType === 'AMOUNT'
-            ? (currency === 'USD' ? '$' : '원')
-            : '주' // 'Shares'
 
         return {
             line1: `${stock} / ${freqLabel}`,

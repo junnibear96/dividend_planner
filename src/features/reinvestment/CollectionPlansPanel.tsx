@@ -3,11 +3,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     type CollectionPlan,
-    type CollectionPlanFrequency,
-    type InvestmentType,
-    type Currency,
     fetchCollectionPlans,
-    createCollectionPlan,
     deleteCollectionPlan,
     updateCollectionPlan,
 } from './reinvestmentApi'
