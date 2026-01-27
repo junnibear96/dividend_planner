@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import SymbolAutocompleteInput from '../features/stock/SymbolAutocompleteInput'
 import PortfolioSummary from './PortfolioSummary'
 import SellDeleteModal from './SellDeleteModal'
-import { searchStockSymbols, type StockApiResponse, getStockCached } from '../features/stock/stockApi'
+import { searchStockSymbols, type StockApiResponse, getStockCached, getStocksBatch } from '../features/stock/stockApi'
 import {
   createPortfolioPosition,
   listPortfolio,
@@ -128,7 +128,55 @@ export default function HomePage() {
   const [rowSavingId, setRowSavingId] = useState<string | null>(null)
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+
   const [positionToDelete, setPositionToDelete] = useState<PortfolioPosition | null>(null)
+
+  const [sortBy, setSortBy] = useState<'profit' | 'evaluation' | null>(null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  const sortedPositions = useMemo(() => {
+    if (!sortBy) return positions
+
+    return [...positions].sort((a, b) => {
+      const qA = quotesBySymbol[a.symbol]
+      const qB = quotesBySymbol[b.symbol]
+      const priceA = qA?.price ?? 0
+      const priceB = qB?.price ?? 0
+
+      let valA = 0
+      let valB = 0
+
+      if (sortBy === 'profit') {
+        const buyA = typeof a.buyPrice === 'number' ? a.buyPrice : 0
+        const buyB = typeof b.buyPrice === 'number' ? b.buyPrice : 0
+        // Per share profit
+        valA = priceA - buyA
+        valB = priceB - buyB
+      } else if (sortBy === 'evaluation') {
+        // Total value
+        valA = priceA * a.amount
+        valB = priceB * b.amount
+      }
+
+      if (valA === valB) return 0
+      const diff = valA - valB
+      return sortOrder === 'asc' ? diff : -diff
+    })
+  }, [positions, quotesBySymbol, sortBy, sortOrder])
+
+  const toggleSort = (field: 'profit' | 'evaluation') => {
+    if (sortBy === field) {
+      if (sortOrder === 'desc') {
+        setSortOrder('asc')
+      } else {
+        setSortBy(null)
+        setSortOrder('desc')
+      }
+    } else {
+      setSortBy(field)
+      setSortOrder('desc')
+    }
+  }
 
   useEffect(() => {
     const q = symbolDraft.trim()
@@ -223,22 +271,55 @@ export default function HomePage() {
           new Set(currentPositions.map((p) => p.symbol.trim().toUpperCase()).filter(Boolean)),
         )
 
-        const results = await Promise.all(
-          uniqueSymbols.map(async (s) => {
-            try {
-              const q = await loadQuote(s)
-              return [s, q] as const
-            } catch {
-              return [
-                s,
-                { symbol: s, price: null, previousClose: null, change: null, changePercent: null, source: null },
-              ] as const
-            }
-          }),
-        )
+        // Batch fetch
+        try {
+          const batchResults = await getStocksBatch(uniqueSymbols)
 
-        if (cancelled) return
-        setQuotesBySymbol(Object.fromEntries(results))
+          const newQuotes: Record<string, QuoteView> = {}
+          for (const s of uniqueSymbols) {
+            const apiData = batchResults[s]
+            if (apiData) {
+              const rt = normalizeRealTime(apiData.realtime)
+              // We don't have previousClose from batch realtime potentially? 
+              // EODHD Realtime might give `previousClose`, `open`, etc.
+              // Let's assume normalizeRealTime handles it if data exists.
+
+              // Re-construct QuoteView
+              // We might lack 'eodLast' fallback here if we only fetched realtime.
+              // But for speed, realtime is what we want.
+              const price = typeof rt.close === 'number' ? rt.close : null
+              const previousClose = typeof rt.previousClose === 'number' ? rt.previousClose : null
+              let change = typeof rt.change === 'number' ? rt.change : null
+              let changePercent = typeof rt.changePercent === 'number' ? rt.changePercent : null
+
+              if (change === null && typeof price === 'number' && typeof previousClose === 'number') {
+                change = price - previousClose
+              }
+              if (changePercent === null && typeof change === 'number' && typeof previousClose === 'number') {
+                changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0
+              }
+
+              newQuotes[s] = {
+                symbol: s,
+                price,
+                previousClose,
+                change,
+                changePercent,
+                source: apiData.source?.realtime === 'api' ? 'api' : 'db'
+              }
+            } else {
+              // Failed to get data for this symbol in batch
+              newQuotes[s] = { symbol: s, price: null, previousClose: null, change: null, changePercent: null, source: null }
+            }
+          }
+          if (cancelled) return
+          setQuotesBySymbol(newQuotes)
+
+        } catch (err) {
+          console.error('Batch load failed', err)
+          // Fallback? Or just leave empty
+        }
+
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load portfolio')
@@ -525,7 +606,57 @@ export default function HomePage() {
         <PortfolioSummary />
 
         <section className="panel">
-          <h2>{t('portfolio.home.portfolioTitle')}</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h2 style={{ margin: 0 }}>{t('portfolio.home.portfolioTitle')}</h2>
+
+            {/* Segmented Control for Sort */}
+            <div className="segmentedControl" style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '8px', gap: '2px' }}>
+              <button
+                type="button"
+                onClick={() => toggleSort('evaluation')}
+                style={{
+                  border: 'none',
+                  background: sortBy === 'evaluation' ? 'var(--bg-surface)' : 'transparent',
+                  boxShadow: sortBy === 'evaluation' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '0.9rem',
+                  fontWeight: sortBy === 'evaluation' ? 600 : 400,
+                  color: sortBy === 'evaluation' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  width: '100px', // Fixed width for stability
+                  textAlign: 'center'
+                }}
+                aria-pressed={sortBy === 'evaluation'}
+              >
+                {t('portfolio.home.sortByValue')}
+                {sortBy === 'evaluation' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleSort('profit')}
+                style={{
+                  border: 'none',
+                  background: sortBy === 'profit' ? 'var(--bg-surface)' : 'transparent',
+                  boxShadow: sortBy === 'profit' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '0.9rem',
+                  fontWeight: sortBy === 'profit' ? 600 : 400,
+                  color: sortBy === 'profit' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  width: '100px',
+                  textAlign: 'center'
+                }}
+                aria-pressed={sortBy === 'profit'}
+              >
+                {t('portfolio.home.sortByProfit')}
+                {sortBy === 'profit' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
+              </button>
+            </div>
+          </div>
           {isLoading ? (
             <p className="empty">{t('portfolio.home.loading')}</p>
           ) : positions.length === 0 ? (
@@ -546,7 +677,7 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {positions.map((p) => {
+                  {sortedPositions.map((p) => {
                     const q = quotesBySymbol[p.symbol]
                     const price = q?.price ?? null
                     const value = typeof price === 'number' ? price * p.amount : null

@@ -136,16 +136,6 @@ export default function PlannerPage() {
           </div>
 
           <div className="headerRight">
-            {user ? (
-              <div className="summary" aria-label="Reinvestment">
-                <button type="button" onClick={() => setIsReinvestOpen(true)}>
-                  {t('planner.reinvest')}
-                </button>
-                <button type="button" className="linkButton" onClick={() => navigate('/reinvest')}>
-                  {t('planner.openPage')}
-                </button>
-              </div>
-            ) : null}
 
             <form className="stockSearch" onSubmit={onStockSearch} role="search">
               <SymbolAutocompleteInput

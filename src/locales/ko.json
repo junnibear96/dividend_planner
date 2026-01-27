@@ -124,7 +124,9 @@
             "portfolioTitle": "보유 종목",
             "loading": "로딩 중…",
             "empty": "보유 중인 종목이 없습니다.",
-            "remove": "삭제"
+            "remove": "삭제",
+            "sortByProfit": "손익순",
+            "sortByValue": "평가액순"
         },
         "table": {
             "symbol": "종목",
@@ -139,7 +141,7 @@
     },
     "planner": {
         "title": "배당 플래너",
-        "subtitle": "수입을 계획하세요. (게스트 모드: 로컬 전용)",
+        "subtitle": "수입을 계획하세요.",
         "reinvest": "재투자",
         "openPage": "플래너 열기",
         "searchPlaceholder": "검색 (예: AAPL)",

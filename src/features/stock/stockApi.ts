@@ -48,6 +48,27 @@ export async function getStockCached(symbol: string, limit = 30): Promise<StockA
   return (await jsonOrError(res)) as StockApiResponse
 }
 
+export async function getStocksBatch(symbols: string[]): Promise<Record<string, StockApiResponse>> {
+  if (symbols.length === 0) return {}
+  const url = `/api/stocks/batch?symbols=${symbols.map(encodeURIComponent).join(',')}`
+  const res = await fetch(url)
+  const body = (await jsonOrError(res)) as { results: Record<string, { realtime: unknown }> }
+
+  const out: Record<string, StockApiResponse> = {}
+  Object.entries(body.results).forEach(([sym, data]) => {
+    // Construct partial StockApiResponse
+    out[sym] = {
+      symbol: sym,
+      source: { realtime: 'api', eod: 'db', dividends: 'db' }, // Simplification
+      realtime: data.realtime,
+      eod: [],
+      dividends: [],
+      dividendFrequency: null
+    }
+  })
+  return out
+}
+
 export async function searchStockSymbols(
   query: string,
   limit = 10,

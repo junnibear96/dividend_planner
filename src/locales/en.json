@@ -124,7 +124,9 @@
             "portfolioTitle": "Portfolio",
             "loading": "Loading…",
             "empty": "No positions yet.",
-            "remove": "Remove"
+            "remove": "Remove",
+            "sortByProfit": "Sort by Profit",
+            "sortByValue": "Sort by Value"
         },
         "table": {
             "symbol": "Symbol",

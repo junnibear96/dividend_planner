@@ -152,12 +152,14 @@ async function upsertCashPool(conn: mysql.PoolConnection, userId: string): Promi
   )
   let poolId = (poolRows[0] as { id: string } | undefined)?.id
   if (!poolId) {
-    poolId = randomUUID()
-    await conn.execute(
-      `INSERT INTO dividend_cash_pool (id, user_id, available_balance)
-       VALUES (:id, :userId, :balance)`,
-      { id: poolId, userId, balance },
+    // poolId = randomUUID() 
+    // Auto-increment
+    const [ins] = await conn.execute<mysql.ResultSetHeader>(
+      `INSERT INTO dividend_cash_pool (user_id, available_balance)
+       VALUES (:userId, :balance)`,
+      { userId, balance },
     )
+    poolId = String(ins.insertId)
   } else {
     await conn.execute(
       `UPDATE dividend_cash_pool SET available_balance = :balance WHERE user_id = :userId`,
@@ -305,13 +307,12 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
     }
   }
 
-  const id = randomUUID()
   const baseWeekDestination = {
     destinationType: 'SAME_AS_SOURCE' as const,
     destinationAssets: [] as Array<{ symbol: string; weight?: number }>,
   }
   const defaultRule: ReinvestmentRule = {
-    id,
+    id: '', // Placeholder, will update after insert
     enabled: false,
     sourceScope: 'ALL',
     destinationType: 'SAME_AS_SOURCE',
@@ -328,9 +329,8 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
     fractionalSharesAllowed: true,
   }
 
-  await conn.execute(
+  const [result] = await conn.execute<mysql.ResultSetHeader>(
     `INSERT INTO reinvestment_rules (
-        id,
         user_id,
         enabled,
         source_scope,
@@ -342,7 +342,6 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
         minimum_amount,
         fractional_shares_allowed
      ) VALUES (
-        :id,
         :userId,
         :enabled,
         :sourceScope,
@@ -355,7 +354,6 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
         :fractionalSharesAllowed
      )`,
     {
-      id,
       userId,
       enabled: 0,
       sourceScope: defaultRule.sourceScope,
@@ -368,6 +366,9 @@ async function getOrCreateRule(conn: mysql.PoolConnection, userId: string): Prom
       fractionalSharesAllowed: 1,
     },
   )
+
+  const id = String(result.insertId)
+  defaultRule.id = id
 
   return defaultRule
 }
@@ -466,10 +467,9 @@ async function accrueDividends(conn: mysql.PoolConnection, userId: string, today
     if (!Number.isFinite(amount) || amount <= 0) continue
 
     await conn.execute(
-      `INSERT INTO dividend_accruals (id, user_id, symbol, amount, accrual_date, frequency)
-       VALUES (:id, :userId, :symbol, :amount, :accrualDate, :frequency)`,
+      `INSERT INTO dividend_accruals (user_id, symbol, amount, accrual_date, frequency)
+       VALUES (:userId, :symbol, :amount, :accrualDate, :frequency)`,
       {
-        id: randomUUID(),
         userId,
         symbol,
         amount,
@@ -528,7 +528,7 @@ async function consumeAccrualsFifo(
     // Partial consumption: split row into consumed + leftover.
     const consumedAmount = remaining
     const leftoverAmount = rowAmount - remaining
-    const leftoverId = randomUUID()
+    // const leftoverId = randomUUID()
 
     await conn.execute(
       `UPDATE dividend_accruals
@@ -538,10 +538,9 @@ async function consumeAccrualsFifo(
     )
 
     await conn.execute(
-      `INSERT INTO dividend_accruals (id, user_id, symbol, amount, accrual_date, frequency)
-       VALUES (:id, :userId, :symbol, :amount, :accrualDate, :frequency)`,
+      `INSERT INTO dividend_accruals (user_id, symbol, amount, accrual_date, frequency)
+       VALUES (:userId, :symbol, :amount, :accrualDate, :frequency)`,
       {
-        id: leftoverId,
         userId,
         symbol: r.symbol,
         amount: leftoverAmount,
@@ -655,7 +654,31 @@ async function runRuleExecutionIfDue(
 
   if (destWeights.length === 0) return null
 
-  const executionId = randomUUID()
+  // const executionId = randomUUID()
+  // We need to insert execution first to get ID? 
+  // But we need executionID for `consumeAccrualsFifo` later.
+  // And we construct `details` before inserting.
+  // We can insert the execution row with Partial details or update it later?
+  // Easier: Just insert execution NOW with empty details, then update it?
+
+  // Or: perform calculation, then Insert Execution, get ID, then Consume Accruals.
+  // The `details` depend on `spentTotal` which depends on calculation loop.
+  // We can do the loop with `executionId` = 'PENDING' then get real ID.
+  // But simulation result needs ID.
+
+  // Strategy:
+  // 1. Calculate everything (spentTotal, details).
+  // 2. Insert Execution. Get ID.
+  // 3. Mark accruals as consumed by ID.
+
+  // However, the loop modifies `holdings` inside it!
+  // And `consumeAccrualsFifo` is called at the end.
+
+  // The logic structure:
+  // loops destWeights -> calculate -> update holdings -> push to details.
+  // then check if valid.
+  // then INSERT execution.
+  // then consume accruals.
 
   const details: ExecutionDetail[] = []
   let spentTotal = 0
@@ -696,7 +719,6 @@ async function runRuleExecutionIfDue(
     } else {
       await conn.execute(
         `INSERT INTO holdings (
-          id,
           user_id,
           symbol,
           shares,
@@ -704,7 +726,6 @@ async function runRuleExecutionIfDue(
           dividend_frequency,
           include_in_reinvestment
         ) VALUES (
-          :id,
           :userId,
           :symbol,
           :shares,
@@ -713,7 +734,6 @@ async function runRuleExecutionIfDue(
           :includeInReinvestment
         )`,
         {
-          id: randomUUID(),
           userId,
           symbol: a.symbol,
           shares: sharesBought,
@@ -747,9 +767,8 @@ async function runRuleExecutionIfDue(
     leftoverUnspent: leftover,
   }
 
-  await conn.execute(
+  const [execRes] = await conn.execute<mysql.ResultSetHeader>(
     `INSERT INTO reinvestment_executions (
-      id,
       user_id,
       rule_id,
       execution_date,
@@ -757,7 +776,6 @@ async function runRuleExecutionIfDue(
       total_amount,
       execution_details
     ) VALUES (
-      :id,
       :userId,
       :ruleId,
       :executionDate,
@@ -766,7 +784,6 @@ async function runRuleExecutionIfDue(
       :executionDetails
     )`,
     {
-      id: executionId,
       userId,
       ruleId: rule.id,
       executionDate: todaySql,
@@ -775,6 +792,7 @@ async function runRuleExecutionIfDue(
       executionDetails: JSON.stringify(executionDetails),
     },
   )
+  const executionId = String(execRes.insertId)
 
   await consumeAccrualsFifo(conn, userId, executionId, sourceSymbols, spentTotal)
 
