@@ -71,7 +71,8 @@ const app = express()
 app.use(cookieParser())
 app.use(express.json())
 
-const port = Number(process.env.API_PORT ?? '5174')
+// Railway provides PORT, but we use API_PORT locally
+const port = Number(process.env.PORT ?? process.env.API_PORT ?? '5174')
 
 const pool = mysql.createPool({
   host: requireEnv('DB_HOST'),
