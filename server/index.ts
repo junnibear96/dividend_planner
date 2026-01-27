@@ -1,4 +1,4 @@
-import dotenv from 'dotenv'
+import './env'
 import express from 'express'
 import mysql from 'mysql2/promise'
 import { randomUUID } from 'node:crypto'
@@ -20,9 +20,7 @@ import {
 } from './collection_plan'
 import { startScheduler } from './scheduler'
 
-// Always load the repo-root `.env` (even if the server is started from `server/`).
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-dotenv.config({ path: path.resolve(__dirname, '../.env') })
 
 type HoldingRow = {
   id: string
@@ -2816,8 +2814,8 @@ app.post('/api/watchlist/refresh', async (req, res) => {
   }
 })
 
-// Serve static files from Vite build in production
-if (process.env.NODE_ENV === 'production') {
+// Serve static files from Vite build in production (or if not explicitly in dev)
+if (process.env.NODE_ENV !== 'development') {
   const distPath = path.join(__dirname, '..', 'dist')
 
   console.log(`Serving static files from: ${distPath}`)
@@ -2826,7 +2824,7 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(distPath))
 
   // SPA fallback: serve index.html for all non-API routes
-  app.get('*', (req, res) => {
+  app.get(/.*/, (req, res) => {
     // Skip API routes
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: 'API endpoint not found' })
