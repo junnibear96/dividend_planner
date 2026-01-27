@@ -131,7 +131,8 @@ export default function HomePage() {
 
   const [positionToDelete, setPositionToDelete] = useState<PortfolioPosition | null>(null)
 
-  const [sortBy, setSortBy] = useState<'profit' | 'evaluation' | null>(null)
+  type SortField = 'symbol' | 'price' | 'change' | 'buyPrice' | 'amount' | 'value' | 'profit'
+  const [sortBy, setSortBy] = useState<SortField | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const sortedPositions = useMemo(() => {
@@ -140,42 +141,100 @@ export default function HomePage() {
     return [...positions].sort((a, b) => {
       const qA = quotesBySymbol[a.symbol]
       const qB = quotesBySymbol[b.symbol]
-      const priceA = qA?.price ?? 0
-      const priceB = qB?.price ?? 0
 
-      let valA = 0
-      let valB = 0
+      let valA: number | string = 0
+      let valB: number | string = 0
 
-      if (sortBy === 'profit') {
-        const buyA = typeof a.buyPrice === 'number' ? a.buyPrice : 0
-        const buyB = typeof b.buyPrice === 'number' ? b.buyPrice : 0
-        // Per share profit
-        valA = priceA - buyA
-        valB = priceB - buyB
-      } else if (sortBy === 'evaluation') {
-        // Total value
-        valA = priceA * a.amount
-        valB = priceB * b.amount
+      switch (sortBy) {
+        case 'symbol':
+          valA = a.symbol
+          valB = b.symbol
+          break
+        case 'price':
+          valA = qA?.price ?? 0
+          valB = qB?.price ?? 0
+          break
+        case 'change':
+          valA = qA?.changePercent ?? 0
+          valB = qB?.changePercent ?? 0
+          break
+        case 'buyPrice':
+          valA = a.buyPrice ?? 0
+          valB = b.buyPrice ?? 0
+          break
+        case 'amount':
+          valA = a.amount
+          valB = b.amount
+          break
+        case 'value': {
+          const priceA = qA?.price ?? 0
+          const priceB = qB?.price ?? 0
+          valA = priceA * a.amount
+          valB = priceB * b.amount
+          break
+        }
+        case 'profit': {
+          const priceA = qA?.price ?? 0
+          const priceB = qB?.price ?? 0
+          const buyA = a.buyPrice ?? 0
+          const buyB = b.buyPrice ?? 0
+          // Total profit for sorting
+          valA = (priceA - buyA) * a.amount
+          valB = (priceB - buyB) * b.amount
+          break
+        }
       }
 
       if (valA === valB) return 0
-      const diff = valA - valB
-      return sortOrder === 'asc' ? diff : -diff
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA)
+      }
+      // Numeric sort
+      const numA = Number(valA)
+      const numB = Number(valB)
+      return sortOrder === 'asc' ? numA - numB : numB - numA
     })
   }, [positions, quotesBySymbol, sortBy, sortOrder])
 
-  const toggleSort = (field: 'profit' | 'evaluation') => {
+  const toggleSort = (field: SortField) => {
     if (sortBy === field) {
       if (sortOrder === 'desc') {
         setSortOrder('asc')
       } else {
         setSortBy(null)
-        setSortOrder('desc')
+        setSortOrder('desc') // Reset default
       }
     } else {
       setSortBy(field)
-      setSortOrder('desc')
+      setSortOrder('desc') // Default to desc for numbers usually
+      if (field === 'symbol') setSortOrder('asc') // Default asc for text
     }
+  }
+
+  const renderHeader = (label: string, field: SortField, className: string = '') => {
+    const isActive = sortBy === field
+    return (
+      <th
+        className={className}
+        onClick={() => toggleSort(field)}
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            toggleSort(field)
+          }
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: className.includes('num') ? 'flex-end' : 'flex-start' }}>
+          {label}
+          <span style={{ fontSize: '0.8em', opacity: isActive ? 1 : 0.3, width: '1em', display: 'inline-block', textAlign: 'center' }}>
+            {isActive ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}
+          </span>
+        </div>
+      </th>
+    )
   }
 
   useEffect(() => {
@@ -606,56 +665,8 @@ export default function HomePage() {
         <PortfolioSummary />
 
         <section className="panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ margin: 0 }}>{t('portfolio.home.portfolioTitle')}</h2>
-
-            {/* Segmented Control for Sort */}
-            <div className="segmentedControl" style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '8px', gap: '2px' }}>
-              <button
-                type="button"
-                onClick={() => toggleSort('evaluation')}
-                style={{
-                  border: 'none',
-                  background: sortBy === 'evaluation' ? 'var(--bg-surface)' : 'transparent',
-                  boxShadow: sortBy === 'evaluation' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                  borderRadius: '6px',
-                  padding: '6px 12px',
-                  fontSize: '0.9rem',
-                  fontWeight: sortBy === 'evaluation' ? 600 : 400,
-                  color: sortBy === 'evaluation' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  width: '100px', // Fixed width for stability
-                  textAlign: 'center'
-                }}
-                aria-pressed={sortBy === 'evaluation'}
-              >
-                {t('portfolio.home.sortByValue')}
-                {sortBy === 'evaluation' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleSort('profit')}
-                style={{
-                  border: 'none',
-                  background: sortBy === 'profit' ? 'var(--bg-surface)' : 'transparent',
-                  boxShadow: sortBy === 'profit' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                  borderRadius: '6px',
-                  padding: '6px 12px',
-                  fontSize: '0.9rem',
-                  fontWeight: sortBy === 'profit' ? 600 : 400,
-                  color: sortBy === 'profit' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  width: '100px',
-                  textAlign: 'center'
-                }}
-                aria-pressed={sortBy === 'profit'}
-              >
-                {t('portfolio.home.sortByProfit')}
-                {sortBy === 'profit' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
-              </button>
-            </div>
           </div>
           {isLoading ? (
             <p className="empty">{t('portfolio.home.loading')}</p>
@@ -666,13 +677,13 @@ export default function HomePage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>{t('portfolio.table.symbol')}</th>
-                    <th className="num">{t('portfolio.table.price')}</th>
-                    <th className="num">{t('portfolio.table.change')}</th>
-                    <th className="num">{t('portfolio.table.buyPrice')}</th>
-                    <th className="num">{t('portfolio.table.amount')}</th>
-                    <th className="num">{t('portfolio.table.value')}</th>
-                    <th className="num">{t('portfolio.table.profit')}</th>
+                    {renderHeader(t('portfolio.table.symbol'), 'symbol')}
+                    {renderHeader(t('portfolio.table.price'), 'price', 'num')}
+                    {renderHeader(t('portfolio.table.change'), 'change', 'num')}
+                    {renderHeader(t('portfolio.table.buyPrice'), 'buyPrice', 'num')}
+                    {renderHeader(t('portfolio.table.amount'), 'amount', 'num')}
+                    {renderHeader(t('portfolio.table.value'), 'value', 'num')}
+                    {renderHeader(t('portfolio.table.profit'), 'profit', 'num')}
                     <th className="num">{t('portfolio.table.actions')}</th>
                   </tr>
                 </thead>

@@ -201,165 +201,227 @@ export default function StockGatheringForm({ onSuccess, onCancel }: Props) {
 
             <style>{`
                 .gatheringForm {
-                    background: var(--surface-card);
-                    color: var(--text-primary);
-                    padding: 24px;
-                    border-radius: 16px;
+                    background: var(--surface-card, #ffffff);
+                    color: var(--text-primary, #111111);
+                    padding: 32px;
+                    border-radius: 24px;
                     display: flex;
                     flex-direction: column;
-                    gap: 24px;
-                    max-width: 480px;
-                    margin: 0 auto;
-                    box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.5));
-                    border: 1px solid var(--border-color);
+                    gap: 28px;
+                    max-width: 440px;
+                    width: 100%;
+                    margin: 20px auto;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+                    border: 1px solid rgba(0,0,0,0.05);
                 }
 
                 .headerSection {
-                    margin-bottom: 12px;
+                    margin-bottom: 8px;
                 }
                 .headerLine {
-                    font-size: 24px;
-                    font-weight: 700;
-                    line-height: 1.3;
+                    font-size: 26px;
+                    font-weight: 800;
+                    line-height: 1.25;
+                    letter-spacing: -0.02em;
                 }
-                .text-accent { color: var(--primary-color); }
-                .text-white { color: var(--text-primary); }
-                .text-gray { color: var(--text-secondary); }
+                .text-accent { color: var(--primary-color, #FFD700); }
+                .text-white { color: var(--text-primary, #111); }
+                .text-gray { color: var(--text-tertiary, #888); font-weight: 600; font-size: 22px; }
 
                 .inputGroup label {
                     display: block;
                     font-size: 14px;
-                    color: var(--text-secondary);
-                    margin-bottom: 8px;
+                    font-weight: 600;
+                    color: var(--text-secondary, #666);
+                    margin-bottom: 10px;
                 }
 
                 .stockInput {
                     width: 100%;
-                    background: var(--background-color);
-                    border: 1px solid var(--border-color);
-                    padding: 12px;
-                    border-radius: 8px;
-                    color: var(--text-primary);
-                    font-size: 16px;
+                    background: var(--bg-secondary, #f5f5f7);
+                    border: 1px solid transparent;
+                    padding: 16px;
+                    border-radius: 14px;
+                    color: var(--text-primary, #111);
+                    font-size: 17px;
+                    font-weight: 500;
                     outline: none;
+                    transition: all 0.2s;
                 }
                 .stockInput:focus {
-                    border-color: var(--primary-color);
+                    background: #fff;
+                    border-color: var(--primary-color, #FFD700);
+                    box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.2);
                 }
 
                 .segmentControl {
                     display: flex;
-                    background: var(--background-color);
+                    background: var(--bg-secondary, #f5f5f7);
                     padding: 4px;
-                    border-radius: 8px;
-                    border: 1px solid var(--border-color);
+                    border-radius: 12px;
                 }
                 .segmentBtn {
                     flex: 1;
                     padding: 10px;
                     background: transparent;
                     border: none;
-                    color: var(--text-secondary);
+                    color: var(--text-secondary, #666);
                     cursor: pointer;
-                    border-radius: 6px;
+                    border-radius: 9px;
                     font-weight: 600;
-                    transition: all 0.2s;
+                    font-size: 14px;
+                    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+                }
+                .segmentBtn:hover {
+                    color: var(--text-primary, #111);
                 }
                 .segmentBtn.active {
-                    background: var(--surface-hover);
-                    color: var(--text-primary);
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    background: #fff;
+                    color: #000;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
                 }
 
                 .amountSection {
-                    background: var(--background-color);
-                    padding: 20px;
-                    border-radius: 12px;
-                    border: 1px solid var(--border-color);
+                    background: transparent;
+                    padding: 10px 0;
+                    text-align: center;
                 }
                 .amountInputWrapper {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    margin-bottom: 16px;
+                    margin-bottom: 24px;
                     position: relative;
                 }
                 .amountInput {
                     background: transparent;
                     border: none;
-                    color: var(--text-primary);
-                    font-size: 32px;
+                    color: var(--text-primary, #111);
+                    font-size: 42px;
                     font-weight: 800;
                     text-align: center;
-                    width: 150px;
+                    width: 200px;
                     outline: none;
+                    padding: 0;
+                    margin: 0 4px;
+                }
+                .amountInput::placeholder {
+                    color: #ddd;
                 }
                 .currencyPrefix, .currencySuffix {
                     font-size: 24px;
                     font-weight: 600;
-                    color: var(--text-primary);
+                    color: var(--text-secondary, #888);
+                    margin-top: 8px;
                 }
                 .currencyToggle {
                     position: absolute;
                     right: 0;
-                    background: var(--surface-hover);
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: var(--bg-secondary, #f5f5f7);
                     border: none;
-                    color: var(--primary-color);
-                    font-size: 12px;
-                    padding: 4px 8px;
-                    border-radius: 4px;
+                    color: var(--text-secondary, #666);
+                    font-size: 11px;
+                    font-weight: 700;
+                    padding: 6px 10px;
+                    border-radius: 20px;
                     cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .currencyToggle:hover {
+                    background: #e5e5e7;
+                    color: #111;
                 }
 
                 .quickChips {
                     display: flex;
                     gap: 8px;
                     justify-content: center;
+                    flex-wrap: wrap;
                 }
                 .chip {
-                    background: var(--surface-hover);
-                    border: 1px solid var(--border-color);
-                    color: var(--text-primary);
-                    padding: 6px 12px;
-                    border-radius: 20px;
+                    background: #fff;
+                    border: 1px solid var(--border-color, #eee);
+                    color: var(--text-primary, #111);
+                    padding: 8px 16px;
+                    border-radius: 24px;
                     cursor: pointer;
-                    font-size: 13px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    transition: all 0.1s;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
                 }
                 .chip:hover {
-                    background: var(--border-color);
+                    background: var(--bg-secondary, #f5f5f7);
+                    transform: translateY(-1px);
+                    box-shadow: 0 3px 6px rgba(0,0,0,0.06);
+                }
+                .chip:active {
+                    transform: translateY(0);
+                }
+
+                .errorMsg {
+                    background: #FEF2F2;
+                    color: #DC2626;
+                    padding: 12px;
+                    border-radius: 8px;
+                    text-align: center;
+                    font-size: 14px;
+                    font-weight: 500;
+                    animation: fadeIn 0.2s;
                 }
 
                 .actionFooter {
                     display: flex;
                     flex-direction: column;
                     gap: 12px;
-                    margin-top: 12px;
+                    margin-top: 8px;
                 }
                 .submitBtn {
-                    background: var(--primary-color);
-                    color: black; /* Keep black text on primary for contrast if primary is yellow */
+                    background: var(--primary-color, #FFD700);
+                    color: #000;
                     border: none;
-                    padding: 16px;
-                    border-radius: 12px;
-                    font-size: 18px;
-                    font-weight: 800;
+                    padding: 18px;
+                    border-radius: 16px;
+                    font-size: 17px;
+                    font-weight: 700;
                     cursor: pointer;
                     width: 100%;
+                    transition: all 0.2s;
+                    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
                 }
                 .submitBtn:hover {
-                    opacity: 0.9;
+                    transform: translateY(-1px);
+                    box-shadow: 0 6px 16px rgba(255, 215, 0, 0.4);
+                    filter: brightness(1.05);
                 }
+                .submitBtn:active {
+                    transform: translateY(0);
+                }
+                .submitBtn:disabled {
+                    opacity: 0.7;
+                    cursor: not-allowed;
+                }
+
                 .cancelBtn {
                     background: transparent;
                     border: none;
-                    color: var(--text-secondary);
+                    color: var(--text-secondary, #666);
                     cursor: pointer;
-                    font-size: 14px;
+                    font-size: 15px;
+                    font-weight: 500;
+                    padding: 10px;
+                    transition: color 0.1s;
                 }
-                .errorMsg {
-                    color: var(--error-color, #ef4444);
-                    text-align: center;
-                    font-size: 14px;
+                .cancelBtn:hover {
+                    color: #111;
+                    text-decoration: underline;
+                }
+
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(-5px); }
+                    to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
         </form>
