@@ -237,7 +237,7 @@ async function getDividendMetadata(symbols: string[]): Promise<
 async function ensureSchema() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS users (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       email VARCHAR(255) NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -248,7 +248,7 @@ async function ensureSchema() {
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS holdings (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       user_id CHAR(36) NOT NULL,
       symbol VARCHAR(16) NOT NULL,
       shares DECIMAL(18,6) NOT NULL,
@@ -264,7 +264,7 @@ async function ensureSchema() {
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS portfolio_positions (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       user_id CHAR(36) NOT NULL,
       symbol VARCHAR(32) NOT NULL,
       amount DECIMAL(18,6) NOT NULL,
@@ -279,7 +279,7 @@ async function ensureSchema() {
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS watchlist_items (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       user_id CHAR(36) NOT NULL,
       symbol VARCHAR(32) NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -393,7 +393,7 @@ async function ensureSchema() {
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS dividend_accruals (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       user_id CHAR(36) NOT NULL,
       symbol VARCHAR(16) NOT NULL,
       amount DECIMAL(18,6) NOT NULL,
@@ -410,7 +410,7 @@ async function ensureSchema() {
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS dividend_cash_pool (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       user_id CHAR(36) NOT NULL,
       available_balance DECIMAL(18,6) NOT NULL,
       PRIMARY KEY (id),
@@ -420,7 +420,7 @@ async function ensureSchema() {
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS reinvestment_rules (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       user_id CHAR(36) NOT NULL,
       enabled TINYINT(1) NOT NULL,
       source_scope VARCHAR(16) NOT NULL,
@@ -440,7 +440,7 @@ async function ensureSchema() {
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS reinvestment_executions (
-      id CHAR(36) NOT NULL,
+      id int NOT NULL AUTO_INCREMENT,
       user_id CHAR(36) NOT NULL,
       rule_id CHAR(36) NOT NULL,
       execution_date DATE NOT NULL,

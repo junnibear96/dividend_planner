@@ -2,7 +2,7 @@
 -- Run this against your MariaDB database (DB_DATABASE)
 
 CREATE TABLE IF NOT EXISTS users (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   email VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS holdings (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   user_id CHAR(36) NOT NULL,
   symbol VARCHAR(16) NOT NULL,
   shares DECIMAL(18,6) NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS portfolio_positions (
 -- Watchlist (관심 목록)
 
 CREATE TABLE IF NOT EXISTS watchlist_items (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   user_id CHAR(36) NOT NULL,
   symbol VARCHAR(32) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS eodhd_fundamentals (
 -- Reinvestment system (dividends accrue into a cash pool and are reinvested on a schedule)
 
 CREATE TABLE IF NOT EXISTS dividend_accruals (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   user_id CHAR(36) NOT NULL,
   symbol VARCHAR(16) NOT NULL,
   amount DECIMAL(18,6) NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS dividend_accruals (
 );
 
 CREATE TABLE IF NOT EXISTS dividend_cash_pool (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   user_id CHAR(36) NOT NULL,
   available_balance DECIMAL(18,6) NOT NULL,
   PRIMARY KEY (id),
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS dividend_cash_pool (
 );
 
 CREATE TABLE IF NOT EXISTS reinvestment_rules (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   user_id CHAR(36) NOT NULL,
   enabled TINYINT(1) NOT NULL,
   source_scope VARCHAR(16) NOT NULL,
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS reinvestment_rules (
 );
 
 CREATE TABLE IF NOT EXISTS reinvestment_executions (
-  id CHAR(36) NOT NULL,
+  id int NOT NULL AUTO_INCREMENT,
   user_id CHAR(36) NOT NULL,
   rule_id CHAR(36) NOT NULL,
   execution_date DATE NOT NULL,

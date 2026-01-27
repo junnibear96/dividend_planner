@@ -7,39 +7,39 @@ import { fileURLToPath } from 'url';
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.env') });
 
 async function reset() {
-    const pool = mysql.createPool({
-        host: process.env.DB_HOST,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_DATABASE,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        namedPlaceholders: true,
-    });
+  const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    namedPlaceholders: true,
+  });
 
-    try {
-        // Tables to reset to use UUIDs
-        const tables = [
-            'reinvestment_executions', // child of rules
-            'dividend_accruals',
-            'reinvestment_rules',
-            'holdings',
-            'dividend_cash_pool',
-            'watchlist_items'
-        ];
+  try {
+    // Tables to reset to use UUIDs
+    const tables = [
+      'reinvestment_executions', // child of rules
+      'dividend_accruals',
+      'reinvestment_rules',
+      'holdings',
+      'dividend_cash_pool',
+      'watchlist_items'
+    ];
 
-        for (const t of tables) {
-            console.log(`Dropping ${t}...`);
-            await pool.query(`DROP TABLE IF EXISTS ${t}`);
-        }
+    for (const t of tables) {
+      console.log(`Dropping ${t}...`);
+      await pool.query(`DROP TABLE IF EXISTS ${t}`);
+    }
 
-        console.log('Tables dropped. Recreating from new schema (manually here to ensure order/correctness)...');
+    console.log('Tables dropped. Recreating from new schema (manually here to ensure order/correctness)...');
 
-        // holdings
-        await pool.query(`
+    // holdings
+    await pool.query(`
         CREATE TABLE holdings (
-          id CHAR(36) NOT NULL,
+          id int NOT NULL AUTO_INCREMENT,
           user_id CHAR(36) NOT NULL,
           symbol VARCHAR(16) NOT NULL,
           shares DECIMAL(18,6) NOT NULL,
@@ -52,12 +52,12 @@ async function reset() {
           INDEX idx_holdings_created_at (created_at)
         )
       `);
-        console.log('Created holdings');
+    console.log('Created holdings');
 
-        // watchlist_items
-        await pool.query(`
+    // watchlist_items
+    await pool.query(`
         CREATE TABLE watchlist_items (
-          id CHAR(36) NOT NULL,
+          id int NOT NULL AUTO_INCREMENT,
           user_id CHAR(36) NOT NULL,
           symbol VARCHAR(32) NOT NULL,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -66,12 +66,12 @@ async function reset() {
           INDEX idx_watchlist_user_created_at (user_id, created_at)
         )
       `);
-        console.log('Created watchlist_items');
+    console.log('Created watchlist_items');
 
-        // dividend_accruals
-        await pool.query(`
+    // dividend_accruals
+    await pool.query(`
         CREATE TABLE dividend_accruals (
-          id CHAR(36) NOT NULL,
+          id int NOT NULL AUTO_INCREMENT,
           user_id CHAR(36) NOT NULL,
           symbol VARCHAR(16) NOT NULL,
           amount DECIMAL(18,6) NOT NULL,
@@ -85,24 +85,24 @@ async function reset() {
           INDEX idx_accruals_user_consumed (user_id, consumed_execution_id)
         )
       `);
-        console.log('Created dividend_accruals');
+    console.log('Created dividend_accruals');
 
-        // dividend_cash_pool
-        await pool.query(`
+    // dividend_cash_pool
+    await pool.query(`
         CREATE TABLE dividend_cash_pool (
-          id CHAR(36) NOT NULL,
+          id int NOT NULL AUTO_INCREMENT,
           user_id CHAR(36) NOT NULL,
           available_balance DECIMAL(18,6) NOT NULL,
           PRIMARY KEY (id),
           UNIQUE KEY uniq_cash_pool_user (user_id)
         )
       `);
-        console.log('Created dividend_cash_pool');
+    console.log('Created dividend_cash_pool');
 
-        // reinvestment_rules
-        await pool.query(`
+    // reinvestment_rules
+    await pool.query(`
         CREATE TABLE reinvestment_rules (
-          id CHAR(36) NOT NULL,
+          id int NOT NULL AUTO_INCREMENT,
           user_id CHAR(36) NOT NULL,
           enabled TINYINT(1) NOT NULL,
           source_scope VARCHAR(16) NOT NULL,
@@ -119,12 +119,12 @@ async function reset() {
           INDEX idx_rules_user_updated (user_id, updated_at)
         )
       `);
-        console.log('Created reinvestment_rules');
+    console.log('Created reinvestment_rules');
 
-        // reinvestment_executions
-        await pool.query(`
+    // reinvestment_executions
+    await pool.query(`
         CREATE TABLE reinvestment_executions (
-          id CHAR(36) NOT NULL,
+          id int NOT NULL AUTO_INCREMENT,
           user_id CHAR(36) NOT NULL,
           rule_id CHAR(36) NOT NULL,
           execution_date DATE NOT NULL,
@@ -138,15 +138,15 @@ async function reset() {
           INDEX idx_exec_rule_date (rule_id, execution_date)
         )
       `);
-        console.log('Created reinvestment_executions');
+    console.log('Created reinvestment_executions');
 
-        console.log('All Reinvestment tables reset to UUID schema.');
+    console.log('All Reinvestment tables reset to UUID schema.');
 
-    } catch (err) {
-        console.error('Error:', err);
-    } finally {
-        await pool.end();
-    }
+  } catch (err) {
+    console.error('Error:', err);
+  } finally {
+    await pool.end();
+  }
 }
 
 reset();

@@ -34,7 +34,7 @@ async function main() {
     // Ensure tables exist
     await pool.execute(
       `CREATE TABLE IF NOT EXISTS users (
-        id CHAR(36) NOT NULL,
+        id int NOT NULL AUTO_INCREMENT,
         email VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -45,7 +45,7 @@ async function main() {
 
     await pool.execute(
       `CREATE TABLE IF NOT EXISTS holdings (
-        id CHAR(36) NOT NULL,
+        id int NOT NULL AUTO_INCREMENT,
         user_id CHAR(36) NOT NULL,
         symbol VARCHAR(16) NOT NULL,
         shares DECIMAL(18,6) NOT NULL,
