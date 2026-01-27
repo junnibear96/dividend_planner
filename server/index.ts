@@ -2816,6 +2816,25 @@ app.post('/api/watchlist/refresh', async (req, res) => {
   }
 })
 
+// Serve static files from Vite build in production
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '..', 'dist')
+
+  console.log(`Serving static files from: ${distPath}`)
+
+  // Serve static assets
+  app.use(express.static(distPath))
+
+  // SPA fallback: serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API endpoint not found' })
+    }
+    res.sendFile(path.join(distPath, 'index.html'))
+  })
+}
+
 const init = async () => {
   try {
     await ensureSchema()
