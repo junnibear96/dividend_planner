@@ -13,6 +13,8 @@ import {
   updateReinvestmentRule,
 } from './reinvestment'
 import { startScheduler } from './scheduler'
+import { initRedis, deleteCache } from './redis'
+import { withCacheSafe, CacheKeys, CacheTTL } from './cache'
 
 // Always load the repo-root `.env` (even if the server is started from `server/`).
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -104,54 +106,96 @@ async function eodhdFetchJson(url: string): Promise<unknown> {
 
 async function fetchRealTimeFromEodhd(symbol: string): Promise<unknown> {
   if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-  const url = `https://eodhd.com/api/real-time/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-    eodhdToken,
-  )}&fmt=json`
-  return await eodhdFetchJson(url)
+
+  return await withCacheSafe(
+    CacheKeys.eodhdRealtime(symbol),
+    CacheTTL.REALTIME,
+    async () => {
+      const url = `https://eodhd.com/api/real-time/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
+        eodhdToken,
+      )}&fmt=json`
+      return await eodhdFetchJson(url)
+    }
+  )
 }
 
 async function fetchEodFromEodhd(symbol: string, limit: number): Promise<unknown[]> {
   if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-  const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-    eodhdToken,
-  )}&fmt=json&limit=${encodeURIComponent(String(limit))}`
-  const rows = await eodhdFetchJson(url)
-  return Array.isArray(rows) ? (rows as unknown[]) : []
+
+  return await withCacheSafe(
+    CacheKeys.eodhdEod(symbol, limit),
+    CacheTTL.EOD,
+    async () => {
+      const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
+        eodhdToken,
+      )}&fmt=json&limit=${encodeURIComponent(String(limit))}`
+      const rows = await eodhdFetchJson(url)
+      return Array.isArray(rows) ? (rows as unknown[]) : []
+    }
+  )
 }
 
 async function fetchEodRangeFromEodhd(symbol: string, from: string, to: string): Promise<unknown[]> {
   if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-  const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-    eodhdToken,
-  )}&fmt=json&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-  const rows = await eodhdFetchJson(url)
-  return Array.isArray(rows) ? (rows as unknown[]) : []
+
+  return await withCacheSafe(
+    CacheKeys.eodhdEodRange(symbol, from, to),
+    CacheTTL.EOD,
+    async () => {
+      const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
+        eodhdToken,
+      )}&fmt=json&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      const rows = await eodhdFetchJson(url)
+      return Array.isArray(rows) ? (rows as unknown[]) : []
+    }
+  )
 }
 
 async function fetchDividendsFromEodhd(symbol: string): Promise<unknown[]> {
   if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-  const url = `https://eodhd.com/api/div/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-    eodhdToken,
-  )}&fmt=json`
-  const rows = await eodhdFetchJson(url)
-  return Array.isArray(rows) ? (rows as unknown[]) : []
+
+  return await withCacheSafe(
+    CacheKeys.eodhdDividends(symbol),
+    CacheTTL.DIVIDENDS,
+    async () => {
+      const url = `https://eodhd.com/api/div/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
+        eodhdToken,
+      )}&fmt=json`
+      const rows = await eodhdFetchJson(url)
+      return Array.isArray(rows) ? (rows as unknown[]) : []
+    }
+  )
 }
 
 async function fetchFundamentalsFromEodhd(symbol: string): Promise<unknown> {
   if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-  const url = `https://eodhd.com/api/fundamentals/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-    eodhdToken,
-  )}&fmt=json`
-  return await eodhdFetchJson(url)
+
+  return await withCacheSafe(
+    CacheKeys.eodhdFundamentals(symbol),
+    CacheTTL.FUNDAMENTALS,
+    async () => {
+      const url = `https://eodhd.com/api/fundamentals/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
+        eodhdToken,
+      )}&fmt=json`
+      return await eodhdFetchJson(url)
+    }
+  )
 }
 
 async function fetchExchangeSymbolsFromEodhd(exchange: string): Promise<unknown[]> {
   if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-  const url = `https://eodhd.com/api/exchange-symbol-list/${encodeURIComponent(
-    exchange,
-  )}?api_token=${encodeURIComponent(eodhdToken)}&fmt=json`
-  const rows = await eodhdFetchJson(url)
-  return Array.isArray(rows) ? (rows as unknown[]) : []
+
+  return await withCacheSafe(
+    CacheKeys.eodhdExchangeSymbols(exchange),
+    CacheTTL.SYMBOLS,
+    async () => {
+      const url = `https://eodhd.com/api/exchange-symbol-list/${encodeURIComponent(
+        exchange,
+      )}?api_token=${encodeURIComponent(eodhdToken)}&fmt=json`
+      const rows = await eodhdFetchJson(url)
+      return Array.isArray(rows) ? (rows as unknown[]) : []
+    }
+  )
 }
 
 async function ensureSchema() {
@@ -1224,53 +1268,60 @@ app.get('/api/stocks/:symbol', async (req, res) => {
     const limit = Number(req.query.limit ?? '30')
     const dividendsLimit = Number(req.query.divLimit ?? '400')
 
-    const source: {
-      realtime: 'db' | 'api'
-      eod: 'db' | 'api'
-      dividends: 'db' | 'api'
-    } = { realtime: 'db', eod: 'db', dividends: 'db' }
+    // ⚡ ENDPOINT-LEVEL CACHING - Cache the entire response for ultra-fast page loads
+    const cachedResponse = await withCacheSafe(
+      CacheKeys.stockEndpoint(symbol, limit),
+      CacheTTL.STOCK_ENDPOINT,
+      async () => {
+        const source: {
+          realtime: 'db' | 'api'
+          eod: 'db' | 'api'
+          dividends: 'db' | 'api'
+        } = { realtime: 'db', eod: 'db', dividends: 'db' }
 
-    let realtime = await loadStockRealtime(symbol)
-    let eod = await loadStockEod(symbol, limit)
-    let dividends = await loadStockDividends(symbol, dividendsLimit)
+        let realtime = await loadStockRealtime(symbol)
+        let eod = await loadStockEod(symbol, limit)
+        let dividends = await loadStockDividends(symbol, dividendsLimit)
 
-    if (!hasEodhdToken) {
-      const missing: string[] = []
-      if (!realtime) missing.push('realtime')
-      if (eod.length === 0) missing.push('eod')
-      if (dividends.length === 0) missing.push('dividends')
-      if (missing.length > 0) {
-        res.status(503).json({
-          error:
-            `Missing EODHD_API_TOKEN (server env). Cannot fetch: ${missing.join(', ')}. ` +
-            `Set EODHD_API_TOKEN or request a symbol already cached in DB.`,
-        })
-        return
+        if (!hasEodhdToken) {
+          const missing: string[] = []
+          if (!realtime) missing.push('realtime')
+          if (eod.length === 0) missing.push('eod')
+          if (dividends.length === 0) missing.push('dividends')
+          if (missing.length > 0) {
+            throw new Error(
+              `Missing EODHD_API_TOKEN (server env). Cannot fetch: ${missing.join(', ')}. ` +
+              `Set EODHD_API_TOKEN or request a symbol already cached in DB.`
+            )
+          }
+        }
+
+        if (!realtime) {
+          const rt = await fetchRealTimeFromEodhd(symbol)
+          await upsertStockRealtime(symbol, rt)
+          source.realtime = 'api'
+          realtime = await loadStockRealtime(symbol)
+        }
+
+        if (eod.length === 0) {
+          const rows = await fetchEodFromEodhd(symbol, Math.max(1, Math.min(365, Math.floor(limit))))
+          await upsertStockEod(symbol, rows)
+          source.eod = 'api'
+          eod = await loadStockEod(symbol, limit)
+        }
+
+        if (dividends.length === 0) {
+          const rows = await fetchDividendsFromEodhd(symbol)
+          await upsertStockDividends(symbol, rows)
+          source.dividends = 'api'
+          dividends = await loadStockDividends(symbol, dividendsLimit)
+        }
+
+        return { symbol, source, realtime, eod, dividends }
       }
-    }
+    )
 
-    if (!realtime) {
-      const rt = await fetchRealTimeFromEodhd(symbol)
-      await upsertStockRealtime(symbol, rt)
-      source.realtime = 'api'
-      realtime = await loadStockRealtime(symbol)
-    }
-
-    if (eod.length === 0) {
-      const rows = await fetchEodFromEodhd(symbol, Math.max(1, Math.min(365, Math.floor(limit))))
-      await upsertStockEod(symbol, rows)
-      source.eod = 'api'
-      eod = await loadStockEod(symbol, limit)
-    }
-
-    if (dividends.length === 0) {
-      const rows = await fetchDividendsFromEodhd(symbol)
-      await upsertStockDividends(symbol, rows)
-      source.dividends = 'api'
-      dividends = await loadStockDividends(symbol, dividendsLimit)
-    }
-
-    res.json({ symbol, source, realtime, eod, dividends })
+    res.json(cachedResponse)
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
@@ -1485,27 +1536,36 @@ app.get('/api/portfolio', async (req, res) => {
       return
     }
 
-    const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      `SELECT
-        id,
-        symbol,
-        amount,
-        buy_price AS buyPrice,
-        created_at AS createdAt,
-        updated_at AS updatedAt
-      FROM portfolio_positions
-      WHERE user_id = :userId
-      ORDER BY updated_at DESC, created_at DESC`,
-      { userId: user.id },
-    )
-    console.log(`[API] GET /portfolio userId=${user.id} returned ${rows.length} rows`)
+    // ⚡ ENDPOINT-LEVEL CACHING - Cache portfolio for ultra-fast home page loads
+    const cachedResponse = await withCacheSafe(
+      CacheKeys.portfolioEndpoint(user.id),
+      CacheTTL.PORTFOLIO_ENDPOINT,
+      async () => {
+        const [rows] = await pool.query<mysql.RowDataPacket[]>(
+          `SELECT
+            id,
+            symbol,
+            amount,
+            buy_price AS buyPrice,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM portfolio_positions
+          WHERE user_id = :userId
+          ORDER BY updated_at DESC, created_at DESC`,
+          { userId: user.id },
+        )
+        console.log(`[API] GET /portfolio userId=${user.id} returned ${rows.length} rows`)
 
-    res.json({
-      positions: (rows as unknown as PortfolioPositionRow[]).map((r) => ({
-        ...r,
-        symbol: toSymbol(r.symbol),
-      })),
-    })
+        return {
+          positions: (rows as unknown as PortfolioPositionRow[]).map((r) => ({
+            ...r,
+            symbol: toSymbol(r.symbol),
+          })),
+        }
+      }
+    )
+
+    res.json(cachedResponse)
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
@@ -1583,6 +1643,10 @@ app.post('/api/portfolio', async (req, res) => {
     )
 
     const position = rows[0] as unknown as PortfolioPositionRow | undefined
+
+    // 🗑️ Invalidate portfolio cache after mutation
+    await deleteCache(CacheKeys.portfolioEndpoint(user.id))
+
     res.status(201).json({
       position: position ? { ...position, symbol: toSymbol(position.symbol) } : undefined,
     })
@@ -1667,6 +1731,10 @@ app.patch('/api/portfolio/:id', async (req, res) => {
     )
 
     const position = rows[0] as unknown as PortfolioPositionRow | undefined
+
+    // 🗑️ Invalidate portfolio cache after mutation
+    await deleteCache(CacheKeys.portfolioEndpoint(user.id))
+
     res.json({
       position: position ? { ...position, symbol: toSymbol(position.symbol) } : undefined,
     })
@@ -1683,13 +1751,22 @@ app.get('/api/portfolio/cash', async (req, res) => {
       return
     }
 
-    const [rows] = await pool.execute<mysql.RowDataPacket[]>(
-      'SELECT cash_balance FROM portfolio_summary WHERE user_id = :userId',
-      { userId: user.id },
+    // ⚡ ENDPOINT-LEVEL CACHING - Cache cash balance for ultra-fast portfolio summary
+    const cachedResponse = await withCacheSafe(
+      CacheKeys.portfolioCashEndpoint(user.id),
+      CacheTTL.PORTFOLIO_CASH_ENDPOINT,
+      async () => {
+        const [rows] = await pool.execute<mysql.RowDataPacket[]>(
+          'SELECT cash_balance FROM portfolio_summary WHERE user_id = :userId',
+          { userId: user.id },
+        )
+
+        const balance = rows.length > 0 ? Number(rows[0].cash_balance) : 0
+        return { cashBalance: balance }
+      }
     )
 
-    const balance = rows.length > 0 ? Number(rows[0].cash_balance) : 0
-    res.json({ cashBalance: balance })
+    res.json(cachedResponse)
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
@@ -1715,6 +1792,9 @@ app.put('/api/portfolio/cash', async (req, res) => {
        ON DUPLICATE KEY UPDATE cash_balance = VALUES(cash_balance)`,
       { userId: user.id, amount },
     )
+
+    // 🗑️ Invalidate cash balance cache after mutation
+    await deleteCache(CacheKeys.portfolioCashEndpoint(user.id))
 
     res.json({ cashBalance: amount })
   } catch (err) {
@@ -1746,6 +1826,9 @@ app.delete('/api/portfolio/:id', async (req, res) => {
       res.status(404).json({ error: 'Position not found' })
       return
     }
+
+    // 🗑️ Invalidate portfolio cache after mutation
+    await deleteCache(CacheKeys.portfolioEndpoint(user.id))
 
     res.status(204).end()
   } catch (err) {
@@ -2361,24 +2444,33 @@ app.get('/api/eod/:symbol', async (req, res) => {
       return
     }
 
-    const source = await ensureEodRangeCached(symbol, from, to)
-    const rows = await loadStockEodRange(symbol, from, to)
+    // ⚡ ENDPOINT-LEVEL CACHING - Cache chart data for ultra-fast rendering
+    const cachedResponse = await withCacheSafe(
+      CacheKeys.eodChartEndpoint(symbol, from, to),
+      CacheTTL.EOD_CHART_ENDPOINT,
+      async () => {
+        const source = await ensureEodRangeCached(symbol, from, to)
+        const rows = await loadStockEodRange(symbol, from, to)
 
-    // Adjusted close preferred; fall back to close.
-    const points = rows
-      .filter((r) => typeof r.date === 'string')
-      .map((r) => {
-        const close =
-          typeof r.adjustedClose === 'number'
-            ? r.adjustedClose
-            : typeof r.close === 'number'
-              ? r.close
-              : null
-        return close === null ? null : { date: r.date, close }
-      })
-      .filter(Boolean)
+        // Adjusted close preferred; fall back to close.
+        const points = rows
+          .filter((r) => typeof r.date === 'string')
+          .map((r) => {
+            const close =
+              typeof r.adjustedClose === 'number'
+                ? r.adjustedClose
+                : typeof r.close === 'number'
+                  ? r.close
+                  : null
+            return close === null ? null : { date: r.date, close }
+          })
+          .filter(Boolean)
 
-    res.json({ symbol, from, to, source, points })
+        return { symbol, from, to, source, points }
+      }
+    )
+
+    res.json(cachedResponse)
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
@@ -2603,7 +2695,12 @@ app.post('/api/watchlist/refresh', async (req, res) => {
 
 const init = async () => {
   try {
+    // Initialize Redis connection
+    await initRedis()
+
+    // Ensure database schema
     await ensureSchema()
+
     app.listen(port, () => {
       console.log(`API listening on http://localhost:${port}`)
       startScheduler(pool)
