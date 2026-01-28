@@ -29,11 +29,8 @@
     "react-i18next": "^16.5.3",
     "react-router-dom": "^7.11.0",
     "recharts": "^3.6.0",
-<<<<<<< HEAD
+    "redis": "^5.10.0",
     "tsx": "^4.21.0"
-=======
-    "redis": "^5.10.0"
->>>>>>> e9ea88357679c50bf0dd1e753fa09ed7f52bf5f9
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

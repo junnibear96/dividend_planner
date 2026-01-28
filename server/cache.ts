@@ -66,8 +66,17 @@ export async function withCache<T>(
     console.log(`⚠️  Cache MISS: ${cacheKey}`)
     const freshData = await fetchFn()
 
-    // Store in cache for next time
-    await setCache(cacheKey, freshData, ttlSeconds)
+    // Store in cache for next time (Skip if empty as per user request)
+    const isEmpty =
+        freshData === null ||
+        freshData === undefined ||
+        (Array.isArray(freshData) && freshData.length === 0)
+
+    if (!isEmpty) {
+        await setCache(cacheKey, freshData, ttlSeconds)
+    } else {
+        console.log(`🚫 Skipping cache set for empty value: ${cacheKey}`)
+    }
 
     return freshData
 }

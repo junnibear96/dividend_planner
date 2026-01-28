@@ -135,6 +135,8 @@ export default function HomePage() {
   const [sortBy, setSortBy] = useState<SortField | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
+  const [visibleItems, setVisibleItems] = useState(15)
+
   const sortedPositions = useMemo(() => {
     if (!sortBy) return positions
 
@@ -364,7 +366,7 @@ export default function HomePage() {
                 previousClose,
                 change,
                 changePercent,
-                source: apiData.source?.realtime === 'api' ? 'api' : 'db'
+                source: apiData.source,
               }
             } else {
               // Failed to get data for this symbol in batch
@@ -688,7 +690,7 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedPositions.map((p) => {
+                  {sortedPositions.slice(0, visibleItems).map((p) => {
                     const q = quotesBySymbol[p.symbol]
                     const price = q?.price ?? null
                     const value = typeof price === 'number' ? price * p.amount : null
@@ -789,6 +791,35 @@ export default function HomePage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {visibleItems < sortedPositions.length && (
+            <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setVisibleItems((prev) => prev + 15)}
+                style={{
+                  padding: '8px 24px',
+                  borderRadius: '20px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  transition: 'all 0.2s',
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-hover)'
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-card)'
+                  e.currentTarget.style.color = 'var(--text-secondary)'
+                }}
+              >
+                {t('common.showMore', 'Show More')}
+              </button>
             </div>
           )}
         </section>

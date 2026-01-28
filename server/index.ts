@@ -1397,11 +1397,164 @@ app.get('/api/stocks/symbols', async (req, res) => {
   }
 })
 
+// IMPORTANT: Specific routes like /batch must come BEFORE wildcard routes like /:symbol
+app.get('/api/stocks/batch', async (req, res) => {
+  try {
+    await ensureSchema()
+
+    const rawSymbols = String(req.query.symbols ?? '')
+    const symbols = rawSymbols
+      .split(',')
+      .map((s) => toSymbol(s))
+      .filter(Boolean)
+
+    if (symbols.length === 0) {
+      res.json({ results: {} })
+      return
+    }
+
+    const uniqueSymbols = Array.from(new Set(symbols))
+    const limit = 50
+    if (uniqueSymbols.length > limit) {
+      res.status(400).json({ error: `Too many symbols. Limit is ${limit}` })
+      return
+    }
+
+    // 1. Check DB Cache for Realtime
+    const cachedRealtime: Record<string, unknown> = {}
+    const missingRealtime: string[] = []
+
+    // Fetch existing from DB
+    const placeholders = uniqueSymbols.map((s, i) => `:s${i}`).join(',')
+    const params: Record<string, unknown> = {}
+    uniqueSymbols.forEach((s, i) => {
+      params[`s${i}`] = s
+    })
+
+    if (uniqueSymbols.length > 0) {
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT symbol, payload, fetched_at FROM stock_realtime WHERE symbol IN (${placeholders})`,
+        params
+      )
+      const now = Date.now()
+      const maxAge = 1000 // 1 second (Force refresh to fix missing data)
+
+      const foundMap = new Map<string, { payload: unknown; fetchedAt: Date }>()
+      for (const r of rows as any[]) {
+        foundMap.set(r.symbol, {
+          payload: typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload,
+          fetchedAt: new Date(r.fetched_at)
+        })
+      }
+
+      for (const s of uniqueSymbols) {
+        const found = foundMap.get(s)
+        const p = found?.payload as any
+        const isValid = p && (typeof p.close === 'number' || typeof p.price === 'number' || typeof p.last === 'number')
+
+        if (found && now - found.fetchedAt.getTime() < maxAge && isValid) {
+          cachedRealtime[s] = found.payload
+        } else {
+          missingRealtime.push(s)
+        }
+      }
+    }
+
+    // 2. Fetch missing from EODHD
+    if (missingRealtime.length > 0 && hasEodhdToken) {
+      try {
+        const toEodhdSymbol = (s: string) => s.includes('.') ? s : `${s}.US`
+        const primary = toEodhdSymbol(missingRealtime[0])
+        const others = missingRealtime.slice(1).map(toEodhdSymbol)
+
+        const token = process.env.EODHD_API_TOKEN
+        let url = `https://eodhd.com/api/real-time/${encodeURIComponent(primary)}?api_token=${token}&fmt=json`
+        if (others.length > 0) {
+          url += `&s=${others.map(encodeURIComponent).join(',')}`
+        }
+
+        console.log(`[Batch] Fetching for ${missingRealtime.length} symbols: ${url.replace(token!, 'REDACTED')}`)
+        const resp = await fetch(url)
+        if (resp.ok) {
+          const data = await resp.json()
+          const items = Array.isArray(data) ? data : [data]
+
+          for (const item of items) {
+            const code = String(item.code || '').toUpperCase()
+            const match = missingRealtime.find(s => {
+              const parts = s.split('.')
+              if (parts[0] === code) return true
+              return false
+            })
+
+            if (match) {
+              await upsertStockRealtime(match, item)
+              cachedRealtime[match] = item
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Batch fetch failed', e)
+      }
+    }
+
+    const results: Record<string, any> = {}
+    for (const s of uniqueSymbols) {
+      results[s] = {
+        realtime: cachedRealtime[s] || null
+      }
+    }
+
+    res.json({ results })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
+  }
+})
+
+app.get('/api/debug/stock', async (req, res) => {
+  const symbol = String(req.query.symbol ?? '').toUpperCase()
+  const token = process.env.EODHD_API_TOKEN
+
+  try {
+    // 1. Check DB
+    const [rows] = await pool.query('SELECT * FROM stock_realtime WHERE symbol = ?', [symbol])
+
+    // 2. Fetch Single (Raw)
+    const singleUrl = `https://eodhd.com/api/real-time/${encodeURIComponent(symbol)}?api_token=${token}&fmt=json`
+    const singleRes = await fetch(singleUrl)
+    const singleData = singleRes.ok ? await singleRes.json() : { error: singleRes.status, statusText: singleRes.statusText }
+
+    // 3. Fetch Single with .US (Raw)
+    const symbolUs = symbol.includes('.') ? symbol : symbol + '.US'
+    const usUrl = `https://eodhd.com/api/real-time/${encodeURIComponent(symbolUs)}?api_token=${token}&fmt=json`
+    const usRes = await fetch(usUrl)
+    const usData = usRes.ok ? await usRes.json() : { error: usRes.status, statusText: usRes.statusText }
+
+    res.json({
+      symbol,
+      db_cache: rows,
+      eodhd_direct_response: {
+        raw_symbol: { url: redactEodhdUrl(singleUrl), data: singleData },
+        us_suffix: { url: redactEodhdUrl(usUrl), data: usData }
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) })
+  }
+})
+
 app.get('/api/stocks/:symbol', async (req, res) => {
   try {
     await ensureSchema()
 
     const symbol = toSymbol(req.params.symbol)
+
+    // Reject reserved keywords that have their own endpoints
+    if (symbol === 'BATCH' || symbol === 'SYMBOLS') {
+      res.status(404).json({ error: `Invalid endpoint. Use /api/stocks/${symbol.toLowerCase()} instead` })
+      return
+    }
+
     if (!symbol) {
       res.status(400).json({ error: 'Symbol is required' })
       return
@@ -1463,7 +1616,6 @@ app.get('/api/stocks/:symbol', async (req, res) => {
       }
     )
 
-<<<<<<< HEAD
     if (!realtime) {
       const rt = await fetchRealTimeFromEodhd(symbol)
       await upsertStockRealtime(symbol, rt)
@@ -1497,134 +1649,7 @@ app.get('/api/stocks/:symbol', async (req, res) => {
   }
 })
 
-app.get('/api/stocks/batch', async (req, res) => {
-  try {
-    await ensureSchema()
 
-    const rawSymbols = String(req.query.symbols ?? '')
-    const symbols = rawSymbols
-      .split(',')
-      .map((s) => toSymbol(s))
-      .filter(Boolean)
-
-    if (symbols.length === 0) {
-      res.json({ results: {} })
-      return
-    }
-
-    const uniqueSymbols = Array.from(new Set(symbols))
-    const limit = 50
-    if (uniqueSymbols.length > limit) {
-      res.status(400).json({ error: `Too many symbols. Limit is ${limit}` })
-      return
-    }
-
-    // 1. Check DB Cache for Realtime
-    const cachedRealtime: Record<string, unknown> = {}
-    const missingRealtime: string[] = []
-
-    // Fetch existing from DB
-    // We need to fetch by one or construct WHERE IN
-    const placeholders = uniqueSymbols.map((s, i) => `:s${i}`).join(',')
-    const params: Record<string, unknown> = {}
-    uniqueSymbols.forEach((s, i) => {
-      params[`s${i}`] = s
-    })
-
-    // NOTE: pool.query might throw if placeholders is empty, but we checked length > 0
-    if (uniqueSymbols.length > 0) {
-      const [rows] = await pool.query<mysql.RowDataPacket[]>(
-        `SELECT symbol, payload, fetched_at FROM stock_realtime WHERE symbol IN (${placeholders})`,
-        params
-      )
-      const now = Date.now()
-      const maxAge = 5 * 60 * 1000 // 5 minutes
-
-      const foundMap = new Map<string, { payload: unknown; fetchedAt: Date }>()
-      for (const r of rows as any[]) {
-        foundMap.set(r.symbol, {
-          payload: typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload,
-          fetchedAt: new Date(r.fetched_at)
-        })
-      }
-
-      for (const s of uniqueSymbols) {
-        const found = foundMap.get(s)
-        if (found && now - found.fetchedAt.getTime() < maxAge) {
-          cachedRealtime[s] = found.payload
-        } else {
-          missingRealtime.push(s)
-        }
-      }
-    } else {
-      // Should not happen due to check above
-    }
-
-    // 2. Fetch missing from EODHD
-    if (missingRealtime.length > 0 && hasEodhdToken) {
-      try {
-        // EODHD Realtime Batch: https://eodhd.com/api/real-time/BMI.US?api_token=DEMO&fmt=json&s=VTI.US,EUR.FOREX
-        const primary = missingRealtime[0]
-        const others = missingRealtime.slice(1)
-
-        const token = process.env.EODHD_API_TOKEN
-        let url = `https://eodhd.com/api/real-time/${encodeURIComponent(primary)}?api_token=${token}&fmt=json`
-        if (others.length > 0) {
-          url += `&s=${others.map(encodeURIComponent).join(',')}`
-        }
-
-        const resp = await fetch(url)
-        if (resp.ok) {
-          const data = await resp.json()
-          // Can be array or single object
-          const items = Array.isArray(data) ? data : [data]
-
-          for (const item of items) {
-            const code = String(item.code || '').toUpperCase()
-            // Map back to symbol. EODHD often drops '.US' or uses different exchange suffix.
-            // We try to match with our missing list.
-            // Simple strategy: check if any missing symbol starts with this code.
-            // Or if it matches exactly.
-
-            // If we requested AAPL.US, response has code: "AAPL".
-            // If we requested VTI.US, response has code: "VTI".
-
-            // We'll iterate missing and see if `toSymbol(item.code)` matches or if `s.startsWith(item.code)`.
-            // Better: if missing ID contains the code.
-
-            // Let's just store based on BEST MATCH in missing list.
-            const match = missingRealtime.find(s => {
-              const parts = s.split('.')
-              if (parts[0] === code) return true
-              return false
-            })
-
-            if (match) {
-              await upsertStockRealtime(match, item)
-              cachedRealtime[match] = item
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Batch fetch failed', e)
-      }
-    }
-
-    const results: Record<string, any> = {}
-    for (const s of uniqueSymbols) {
-      results[s] = {
-        realtime: cachedRealtime[s] || null
-      }
-    }
-
-    res.json({ results })
-=======
-    res.json(cachedResponse)
->>>>>>> e9ea88357679c50bf0dd1e753fa09ed7f52bf5f9
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
-  }
-})
 
 app.get('/api/auth/me', async (req, res) => {
   const user = readSession(req)
@@ -1963,31 +1988,6 @@ app.post('/api/portfolio', async (req, res) => {
       }
       res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
     }
-<<<<<<< HEAD
-=======
-
-    const [rows] = await pool.query<mysql.RowDataPacket[]>(
-      `SELECT
-        id,
-        symbol,
-        amount,
-        buy_price AS buyPrice,
-        created_at AS createdAt,
-        updated_at AS updatedAt
-      FROM portfolio_positions
-      WHERE id = :id AND user_id = :userId`,
-      { id, userId: user.id },
-    )
-
-    const position = rows[0] as unknown as PortfolioPositionRow | undefined
-
-    // 🗑️ Invalidate portfolio cache after mutation
-    await deleteCache(CacheKeys.portfolioEndpoint(user.id))
-
-    res.status(201).json({
-      position: position ? { ...position, symbol: toSymbol(position.symbol) } : undefined,
-    })
->>>>>>> e9ea88357679c50bf0dd1e753fa09ed7f52bf5f9
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
@@ -3098,12 +3098,8 @@ const init = async () => {
 
     // Ensure database schema
     await ensureSchema()
-<<<<<<< HEAD
-    app.listen(port, '0.0.0.0', () => {
-=======
 
-    app.listen(port, () => {
->>>>>>> e9ea88357679c50bf0dd1e753fa09ed7f52bf5f9
+    app.listen(port, '0.0.0.0', () => {
       console.log(`API listening on http://localhost:${port}`)
       startScheduler(pool)
     })
