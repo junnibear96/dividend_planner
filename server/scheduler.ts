@@ -30,12 +30,10 @@ async function updateRealTimeData(pool: mysql.Pool) {
 
         // 2. Chunk and fetch
         // User requested limit: ~900 symbols per minute.
-        // Chunk size = 50.
-        // Chunks per minute = 900 / 50 = 18.
-        // Seconds per chunk = 60 / 18 = 3.333s.
-        // We'll wait 3400ms between chunks to be safe.
-        const CHUNK_SIZE = 50
-        const DELAY_MS = 3400
+        // Chunk size = 20 (Reduced from 50 to avoid fetch errors)
+        // We'll wait 2000ms between chunks to be safe.
+        const CHUNK_SIZE = 20
+        const DELAY_MS = 2000
         let updatedCount = 0
 
         for (let i = 0; i < allSymbols.length; i += CHUNK_SIZE) {
