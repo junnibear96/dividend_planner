@@ -1,45 +1,9 @@
 import mysql from 'mysql2/promise'
+import { fetchStockDataBatchYahoo } from './yahoo'
 
 
-function redactEodhdUrl(rawUrl: string): string {
-    try {
-        const u = new URL(rawUrl)
-        if (u.searchParams.has('api_token')) {
-            u.searchParams.set('api_token', 'REDACTED')
-        }
-        return u.toString()
-    } catch {
-        return rawUrl.replace(/api_token=([^&]+)/i, 'api_token=REDACTED')
-    }
-}
+// EODHD helpers removed
 
-async function eodhdFetchJson(url: string): Promise<unknown> {
-    const res = await fetch(url)
-    if (!res.ok) {
-        throw new Error(`EODHD request failed (${res.status}) for ${redactEodhdUrl(url)}`)
-    }
-    return (await res.json()) as unknown
-}
-
-async function fetchBulkRealTime(symbols: string[]): Promise<unknown[]> {
-    const token = process.env.EODHD_API_TOKEN
-    if (!token) throw new Error('Missing EODHD_API_TOKEN')
-    if (symbols.length === 0) return []
-
-    // EODHD Real-time bulk: /real-time/FirstSymbol?s=SecondSymbol,ThirdSymbol,...&fmt=json
-    const first = symbols[0]
-    const rest = symbols.slice(1)
-    const sParam = rest.length > 0 ? `&s=${rest.map(encodeURIComponent).join(',')}` : ''
-
-    const url = `https://eodhd.com/api/real-time/${encodeURIComponent(first)}?api_token=${encodeURIComponent(token)}&fmt=json${sParam}`
-
-    const res = await eodhdFetchJson(url)
-    // Determine if response is array or single object
-    if (Array.isArray(res)) return res
-    // If single object, wrap in array (unless it's empty/error?)
-    if (res && typeof res === 'object') return [res]
-    return []
-}
 
 async function updateRealTimeData(pool: mysql.Pool) {
     console.log('[Scheduler] Starting 6-hour real-time data update...')
@@ -77,11 +41,13 @@ async function updateRealTimeData(pool: mysql.Pool) {
         for (let i = 0; i < allSymbols.length; i += CHUNK_SIZE) {
             const chunk = allSymbols.slice(i, i + CHUNK_SIZE)
             try {
-                const data = await fetchBulkRealTime(chunk) as any[]
+                // Yahoo Batch
+                const batchMap = await fetchStockDataBatchYahoo(chunk)
+                const items = Object.values(batchMap)
 
                 // 3. Upsert
-                for (const item of data) {
-                    const code = item.code || item.symbol
+                for (const item of items) {
+                    const code = item.symbol
                     if (!code) continue
 
                     await pool.execute(
@@ -93,18 +59,11 @@ async function updateRealTimeData(pool: mysql.Pool) {
                     updatedCount++
                 }
 
-                // Rate limit delay
+                // Rate limit delay (Wait between chunks to avoid Yahoo ban if aggressive)
                 await new Promise(r => setTimeout(r, DELAY_MS))
 
             } catch (err: unknown) {
-                // Handle 402 specifically
-                const msg = err instanceof Error ? err.message : String(err)
-                if (msg.includes('402')) {
-                    console.log(`[Scheduler] API Limit Reached (402). Pausing real-time updates for this cycle.`)
-                    break // Stop processing this cycle gracefully
-                } else {
-                    console.error(`[Scheduler] Error fetching chunk ${i}-${i + CHUNK_SIZE}:`, err)
-                }
+                console.error(`[Scheduler] Error fetching chunk ${i}-${i + CHUNK_SIZE}:`, err)
             }
         }
 

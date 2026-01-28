@@ -86,6 +86,10 @@ function normalizeRealTime(rt: unknown) {
 
   const low = typeof obj.low === 'number' ? obj.low : undefined
   const high = typeof obj.high === 'number' ? obj.high : undefined
+  const low52 = typeof obj.low52 === 'number' ? obj.low52 : undefined
+  const high52 = typeof obj.high52 === 'number' ? obj.high52 : undefined
+  const dividendRate = typeof obj.dividendRate === 'number' ? obj.dividendRate : undefined
+  const dividendYield = typeof obj.dividendYield === 'number' ? obj.dividendYield : undefined
 
   return {
     name,
@@ -96,6 +100,10 @@ function normalizeRealTime(rt: unknown) {
     changePercent,
     low,
     high,
+    low52,
+    high52,
+    dividendRate,
+    dividendYield,
   }
 }
 
@@ -292,18 +300,27 @@ export default function StockPage() {
   const dividendRowsLast6 = useMemo(() => dividends.slice(0, 6), [dividends])
 
   const annualDividendSum = useMemo(() => {
+    // Prefer Yahoo's explicit rate if available and non-zero
+    if (rt.dividendRate && rt.dividendRate > 0) return rt.dividendRate
+
     const rows = clampDateRows(dividends, 365)
     const sum = rows.reduce((acc, r) => acc + r.value, 0)
     return sum
-  }, [dividends])
+  }, [dividends, rt.dividendRate])
 
   const dividendYield = useMemo(() => {
+    // Prefer Yahoo's explicit yield if available
+    if (rt.dividendYield && rt.dividendYield > 0) return rt.dividendYield
+
     if (typeof currentPrice !== 'number' || currentPrice <= 0) return null
     return (annualDividendSum / currentPrice) * 100
-  }, [annualDividendSum, currentPrice])
+  }, [annualDividendSum, currentPrice, rt.dividendYield])
 
-  // 52-week range: mocked for MVP (per requirement)
-  const range52w = { low: 0, high: 0 }
+  // 52-week range
+  const range52w = {
+    low: rt.low52 ?? 0,
+    high: rt.high52 ?? 0
+  }
 
   const isEtf = Boolean(rt.name && rt.name.toLowerCase().includes('etf'))
 
@@ -472,7 +489,7 @@ export default function StockPage() {
                   label={t('stock.stats.range52w')}
                   value={
                     range52w.low === 0 && range52w.high === 0
-                      ? '— (mocked)'
+                      ? '—'
                       : `${formatMoney2(range52w.low)} ~ ${formatMoney2(range52w.high)}`
                   }
                 />

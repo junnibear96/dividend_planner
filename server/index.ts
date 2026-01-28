@@ -21,6 +21,7 @@ import {
 import { startScheduler } from './scheduler'
 import { initRedis, deleteCache } from './redis'
 import { withCacheSafe, CacheKeys, CacheTTL } from './cache'
+import { fetchStockDataYahoo, fetchStockDataBatchYahoo, fetchStockEodYahoo, fetchStockDividendsYahoo } from './yahoo'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -86,7 +87,7 @@ const pool = mysql.createPool({
 })
 
 const jwtSecret = requireEnv('AUTH_JWT_SECRET')
-const eodhdToken = process.env.EODHD_API_TOKEN ?? ''
+const eodhdToken = (process.env.EODHD_API_TOKEN ?? '').trim()
 const hasEodhdToken = Boolean(eodhdToken)
 
 function redactEodhdUrl(rawUrl: string): string {
@@ -1108,7 +1109,7 @@ async function ensureEodRangeCached(symbol: string, from: string, to: string): P
   const needs = await shouldRefreshEodRange(symbol, from, to, 24 * 60 * 60 * 1000)
   if (!needs) return 'db'
 
-  const rows = await fetchEodRangeFromEodhd(symbol, from, to)
+  const rows = await fetchStockEodYahoo(symbol, from, to)
   await upsertStockEod(symbol, rows)
   return 'api'
 }
@@ -1461,36 +1462,18 @@ app.get('/api/stocks/batch', async (req, res) => {
     }
 
     // 2. Fetch missing from EODHD
-    if (missingRealtime.length > 0 && hasEodhdToken) {
+    // 2. Fetch missing from Yahoo Finance (Unofficial)
+    if (missingRealtime.length > 0) {
       try {
-        const toEodhdSymbol = (s: string) => s.includes('.') ? s : `${s}.US`
-        const primary = toEodhdSymbol(missingRealtime[0])
-        const others = missingRealtime.slice(1).map(toEodhdSymbol)
+        const batchMap = await fetchStockDataBatchYahoo(missingRealtime)
+        const foundSymbols = Object.keys(batchMap)
 
-        const token = process.env.EODHD_API_TOKEN
-        let url = `https://eodhd.com/api/real-time/${encodeURIComponent(primary)}?api_token=${token}&fmt=json`
-        if (others.length > 0) {
-          url += `&s=${others.map(encodeURIComponent).join(',')}`
-        }
-
-        console.log(`[Batch] Fetching for ${missingRealtime.length} symbols: ${url.replace(token!, 'REDACTED')}`)
-        const resp = await fetch(url)
-        if (resp.ok) {
-          const data = await resp.json()
-          const items = Array.isArray(data) ? data : [data]
-
-          for (const item of items) {
-            const code = String(item.code || '').toUpperCase()
-            const match = missingRealtime.find(s => {
-              const parts = s.split('.')
-              if (parts[0] === code) return true
-              return false
-            })
-
-            if (match) {
-              await upsertStockRealtime(match, item)
-              cachedRealtime[match] = item
-            }
+        if (foundSymbols.length > 0) {
+          console.log(`[Batch] Fetched ${foundSymbols.length} symbols from Yahoo Finance`)
+          for (const s of foundSymbols) {
+            const data = batchMap[s]
+            await upsertStockRealtime(s, data)
+            cachedRealtime[s] = data
           }
         }
       } catch (e) {
@@ -1513,7 +1496,7 @@ app.get('/api/stocks/batch', async (req, res) => {
 
 app.get('/api/debug/stock', async (req, res) => {
   const symbol = String(req.query.symbol ?? '').toUpperCase()
-  const token = process.env.EODHD_API_TOKEN
+  const token = (process.env.EODHD_API_TOKEN ?? '').trim()
 
   try {
     // 1. Check DB
@@ -1580,7 +1563,7 @@ app.get('/api/stocks/:symbol', async (req, res) => {
 
         if (!hasEodhdToken) {
           const missing: string[] = []
-          if (!realtime) missing.push('realtime')
+          // if (!realtime) missing.push('realtime') // Yahoo used for realtime
           if (eod.length === 0) missing.push('eod')
           if (dividends.length === 0) missing.push('dividends')
           if (missing.length > 0) {
@@ -1592,21 +1575,26 @@ app.get('/api/stocks/:symbol', async (req, res) => {
         }
 
         if (!realtime) {
-          const rt = await fetchRealTimeFromEodhd(symbol)
-          await upsertStockRealtime(symbol, rt)
-          source.realtime = 'api'
-          realtime = await loadStockRealtime(symbol)
+          const rt = await fetchStockDataYahoo(symbol)
+          if (rt) {
+            await upsertStockRealtime(symbol, rt)
+            source.realtime = 'api'
+            realtime = rt
+          }
         }
 
         if (eod.length === 0) {
-          const rows = await fetchEodFromEodhd(symbol, Math.max(1, Math.min(365, Math.floor(limit))))
+          const now = new Date()
+          const past = new Date()
+          past.setDate(past.getDate() - (limit + 30))
+          const rows = await fetchStockEodYahoo(symbol, past.toISOString().split('T')[0], now.toISOString().split('T')[0])
           await upsertStockEod(symbol, rows)
           source.eod = 'api'
           eod = await loadStockEod(symbol, limit)
         }
 
         if (dividends.length === 0) {
-          const rows = await fetchDividendsFromEodhd(symbol)
+          const rows = await fetchStockDividendsYahoo(symbol)
           await upsertStockDividends(symbol, rows)
           source.dividends = 'api'
           dividends = await loadStockDividends(symbol, dividendsLimit)
@@ -1616,32 +1604,58 @@ app.get('/api/stocks/:symbol', async (req, res) => {
       }
     )
 
-    if (!realtime) {
-      const rt = await fetchRealTimeFromEodhd(symbol)
-      await upsertStockRealtime(symbol, rt)
-      source.realtime = 'api'
-      realtime = await loadStockRealtime(symbol)
+    let { realtime, eod, dividends, source } = cachedResponse as any
+
+    // Force refresh if data format is old (missing dividend/range info)
+    const rtCheck = realtime as any
+    const isStale = rtCheck && (typeof rtCheck.dividendRate === 'undefined' || typeof rtCheck.low52 === 'undefined')
+
+    if (!realtime || isStale) {
+      const rt = await fetchStockDataYahoo(symbol)
+      if (rt) {
+        await upsertStockRealtime(symbol, rt)
+        source.realtime = 'api'
+        realtime = await loadStockRealtime(symbol)
+      }
     }
 
     if (eod.length === 0) {
-      const rows = await fetchEodFromEodhd(symbol, Math.max(1, Math.min(365, Math.floor(limit))))
+      const now = new Date()
+      const past = new Date()
+      past.setDate(past.getDate() - (limit + 30))
+      const rows = await fetchStockEodYahoo(symbol, past.toISOString().split('T')[0], now.toISOString().split('T')[0])
       await upsertStockEod(symbol, rows)
       source.eod = 'api'
       eod = await loadStockEod(symbol, limit)
     }
 
     if (dividends.length === 0) {
-      const rows = await fetchDividendsFromEodhd(symbol)
+      const rows = await fetchStockDividendsYahoo(symbol)
       await upsertStockDividends(symbol, rows)
       source.dividends = 'api'
       dividends = await loadStockDividends(symbol, dividendsLimit)
     }
 
-    const [freqRows] = await pool.query<mysql.RowDataPacket[]>(
-      'SELECT dividend_frequency FROM eodhd_exchange_symbols WHERE symbol = :symbol LIMIT 1',
-      { symbol },
-    )
-    const dividendFrequency = (freqRows[0] as { dividend_frequency?: string } | undefined)?.dividend_frequency ?? null
+    // Calculate frequency from dividends list
+    let dividendFrequency: string | null = null
+    if (dividends.length > 0) {
+      const now = new Date()
+      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      const recentDivs = dividends.filter((d: any) => new Date(d.date) >= oneYearAgo)
+      const count = recentDivs.length
+
+      if (count >= 10) dividendFrequency = 'Monthly'
+      else if (count >= 3) dividendFrequency = 'Quarterly'
+      else if (count >= 1) dividendFrequency = 'Annually'
+    }
+
+    if (!dividendFrequency) {
+      const [freqRows] = await pool.query<mysql.RowDataPacket[]>(
+        'SELECT dividend_frequency FROM eodhd_exchange_symbols WHERE symbol = :symbol LIMIT 1',
+        { symbol },
+      )
+      dividendFrequency = (freqRows[0] as { dividend_frequency?: string } | undefined)?.dividend_frequency ?? null
+    }
 
     res.json({ symbol, source, realtime, eod, dividends, dividendFrequency })
   } catch (err) {

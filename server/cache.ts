@@ -57,13 +57,23 @@ export async function withCache<T>(
 ): Promise<T> {
     // Try to get from cache first
     const cached = await getCache<T>(cacheKey)
-    if (cached !== null) {
+
+    // Check if cached value is empty (User requested to ignore empty cache)
+    const isCachedEmpty =
+        cached === null ||
+        cached === undefined ||
+        (Array.isArray(cached) && cached.length === 0)
+
+    if (cached !== null && !isCachedEmpty) {
         console.log(`✅ Cache HIT: ${cacheKey}`)
         return cached
     }
 
-    // Cache miss - fetch fresh data
-    console.log(`⚠️  Cache MISS: ${cacheKey}`)
+    // Cache miss or empty cache - fetch fresh data
+    console.log(isCachedEmpty && cached !== null
+        ? `⚠️  Cache HIT but EMPTY (Refreshing): ${cacheKey}`
+        : `⚠️  Cache MISS: ${cacheKey}`)
+
     const freshData = await fetchFn()
 
     // Store in cache for next time (Skip if empty as per user request)
