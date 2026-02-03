@@ -302,8 +302,21 @@
     "reinvestment": {
         "title": "Reinvestment",
         "subtitle": "Plan Week 1–4 reinvestment rules and review history.",
+        "tabs": {
+            "timeline": "Timeline",
+            "future": "Future View"
+        },
         "week": "Week {{week}}",
         "weeks": "Weeks",
+        "execution": {
+            "button": "Confirm Purchase",
+            "title": "Confirm Execution",
+            "description": "Verify the assets to be purchased. You can adjust the exact share amounts if they differ from the simulation (e.g. fractional differences).",
+            "totalCost": "Total Cost",
+            "warning": "Confirming will deduct this amount from your cash balance and add these shares to your portfolio.",
+            "confirm": "Yes, Execute Trade",
+            "error": "Failed to execute trade."
+        },
         "summary": {
             "cashAvailable": "Dividend Cash Available",
             "nextScheduled": "Next Scheduled Reinvestment"
@@ -375,7 +388,9 @@
     "timeline": {
         "summary": {
             "title": "Summary",
-            "subtitle": "{{month}} {{year}} — weekly slices with compounding across months."
+            "subtitle": "{{month}} {{year}} — weekly slices with compounding across months.",
+            "purchasesWeek": "Week {{week}} Purchase Summary",
+            "purchasesMonth": "Monthly Purchase Summary"
         },
         "week": "Week {{week}}",
         "metric": {
@@ -400,6 +415,19 @@
             "months": "Months",
             "years": "Years",
             "selectedMonthYear": "Selected month and year"
+        }
+    },
+    "future": {
+        "title": "Future Projection",
+        "stats": {
+            "projectedValue": "Projected Value",
+            "totalShares": "Total Shares",
+            "totalInvested": "Total Invested",
+            "roi": "Est. ROI"
+        },
+        "chart": {
+            "portfolioValue": "Portfolio Value",
+            "investedAmount": "Invested Amount"
         }
     }
 }

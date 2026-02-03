@@ -301,9 +301,22 @@
     },
     "reinvestment": {
         "title": "재투자",
-        "subtitle": "1–4주차 재투자 규칙을 계획하고 내역을 검토하세요.",
+        "subtitle": "1-4주차 재투자 규칙을 계획하고 기록을 검토합니다.",
+        "tabs": {
+            "timeline": "타임라인",
+            "future": "미래보기"
+        },
         "week": "{{week}}주차",
-        "weeks": "주차 선택",
+        "weeks": "주간",
+        "execution": {
+            "button": "매수 확정 (실행)",
+            "title": "매수 실행 확인",
+            "description": "구매할 자산을 확인하세요. 시뮬레이션과 실제 체결량이 다른 경우(소수점 차이 등) 정확한 수량으로 수정할 수 있습니다.",
+            "totalCost": "총 비용",
+            "warning": "확인 시 위 금액이 현금 잔고에서 차감되며 주식이 포트폴리오에 추가됩니다.",
+            "confirm": "예, 매매 실행",
+            "error": "매매 실행에 실패했습니다."
+        },
         "summary": {
             "cashAvailable": "사용 가능 배당금",
             "nextScheduled": "다음 재투자 예정일"
@@ -375,7 +388,9 @@
     "timeline": {
         "summary": {
             "title": "요약",
-            "subtitle": "{{year}}년 {{month}} — 월별 복리 효과가 포함된 주간 슬라이스."
+            "subtitle": "{{year}}년 {{month}} — 월별 복리 효과가 포함된 주간 슬라이스.",
+            "purchasesWeek": "{{week}}주차 매수 자산 요약",
+            "purchasesMonth": "월간 매수 자산 요약"
         },
         "week": "{{week}}주차",
         "metric": {
@@ -400,6 +415,19 @@
             "months": "월",
             "years": "연도",
             "selectedMonthYear": "선택된 월/연도"
+        }
+    },
+    "future": {
+        "title": "자산 성장 예측",
+        "stats": {
+            "projectedValue": "예상 자산 가치",
+            "totalShares": "모으게 될 주식 수",
+            "totalInvested": "총 투자 원금",
+            "roi": "예상 수익률"
+        },
+        "chart": {
+            "portfolioValue": "자산 가치",
+            "investedAmount": "투자 원금"
         }
     }
 }

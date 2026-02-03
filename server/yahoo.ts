@@ -169,6 +169,7 @@ export async function fetchStockDividendsYahoo(symbol: string): Promise<any[]> {
         log(`Fetching Dividends for ${ySymbol}`)
         const result = await yahooFinance.historical(ySymbol, {
             period1: period1,
+            period2: new Date().toISOString().split('T')[0], // explicitly set to today to satisfy validation
             interval: '1d',
             events: 'dividends'
         }) as any[]

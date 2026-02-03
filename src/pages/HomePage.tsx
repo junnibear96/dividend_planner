@@ -94,6 +94,7 @@ async function loadQuote(symbol: string): Promise<QuoteView> {
     changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0
   }
 
+
   return {
     symbol,
     price,
@@ -102,6 +103,50 @@ async function loadQuote(symbol: string): Promise<QuoteView> {
     changePercent,
     source: data.source,
   }
+}
+
+function processBatchResults(
+  symbols: string[],
+  results: Record<string, StockApiResponse>,
+): Record<string, QuoteView> {
+  const out: Record<string, QuoteView> = {}
+  for (const s of symbols) {
+    const apiData = results[s]
+    if (apiData) {
+      const rt = normalizeRealTime(apiData.realtime)
+
+      const price = typeof rt.close === 'number' ? rt.close : null
+      const previousClose = typeof rt.previousClose === 'number' ? rt.previousClose : null
+      let change = typeof rt.change === 'number' ? rt.change : null
+      let changePercent = typeof rt.changePercent === 'number' ? rt.changePercent : null
+
+      if (change === null && typeof price === 'number' && typeof previousClose === 'number') {
+        change = price - previousClose
+      }
+      if (changePercent === null && typeof change === 'number' && typeof previousClose === 'number') {
+        changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0
+      }
+
+      out[s] = {
+        symbol: s,
+        price,
+        previousClose,
+        change,
+        changePercent,
+        source: apiData.source,
+      }
+    } else {
+      out[s] = {
+        symbol: s,
+        price: null,
+        previousClose: null,
+        change: null,
+        changePercent: null,
+        source: null,
+      }
+    }
+  }
+  return out
 }
 
 export default function HomePage() {
@@ -332,50 +377,27 @@ export default function HomePage() {
           new Set(currentPositions.map((p) => p.symbol.trim().toUpperCase()).filter(Boolean)),
         )
 
-        // Batch fetch
+        // Split into batches: First 15 (visible immediately) vs The Rest
+        const initialBatchCount = 15
+        const firstBatch = uniqueSymbols.slice(0, initialBatchCount)
+        const restBatch = uniqueSymbols.slice(initialBatchCount)
+
         try {
-          const batchResults = await getStocksBatch(uniqueSymbols)
-
-          const newQuotes: Record<string, QuoteView> = {}
-          for (const s of uniqueSymbols) {
-            const apiData = batchResults[s]
-            if (apiData) {
-              const rt = normalizeRealTime(apiData.realtime)
-              // We don't have previousClose from batch realtime potentially? 
-              // EODHD Realtime might give `previousClose`, `open`, etc.
-              // Let's assume normalizeRealTime handles it if data exists.
-
-              // Re-construct QuoteView
-              // We might lack 'eodLast' fallback here if we only fetched realtime.
-              // But for speed, realtime is what we want.
-              const price = typeof rt.close === 'number' ? rt.close : null
-              const previousClose = typeof rt.previousClose === 'number' ? rt.previousClose : null
-              let change = typeof rt.change === 'number' ? rt.change : null
-              let changePercent = typeof rt.changePercent === 'number' ? rt.changePercent : null
-
-              if (change === null && typeof price === 'number' && typeof previousClose === 'number') {
-                change = price - previousClose
-              }
-              if (changePercent === null && typeof change === 'number' && typeof previousClose === 'number') {
-                changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0
-              }
-
-              newQuotes[s] = {
-                symbol: s,
-                price,
-                previousClose,
-                change,
-                changePercent,
-                source: apiData.source,
-              }
-            } else {
-              // Failed to get data for this symbol in batch
-              newQuotes[s] = { symbol: s, price: null, previousClose: null, change: null, changePercent: null, source: null }
-            }
+          // 1. Fetch first batch immediately
+          if (firstBatch.length > 0) {
+            const batch1 = await getStocksBatch(firstBatch)
+            if (cancelled) return
+            const quotes1 = processBatchResults(firstBatch, batch1)
+            setQuotesBySymbol((prev) => ({ ...prev, ...quotes1 }))
           }
-          if (cancelled) return
-          setQuotesBySymbol(newQuotes)
 
+          // 2. Fetch the rest in the background
+          if (restBatch.length > 0) {
+            const batch2 = await getStocksBatch(restBatch)
+            if (cancelled) return
+            const quotes2 = processBatchResults(restBatch, batch2)
+            setQuotesBySymbol((prev) => ({ ...prev, ...quotes2 }))
+          }
         } catch (err) {
           console.error('Batch load failed', err)
           // Fallback? Or just leave empty
@@ -713,6 +735,8 @@ export default function HomePage() {
                           : 'profitNeg'
                         : ''
 
+                    const totalProfit = typeof profitPerShare === 'number' ? profitPerShare * p.amount : null
+
                     return (
                       <tr key={p.id}>
                         <td>
@@ -761,8 +785,8 @@ export default function HomePage() {
                           {typeof value === 'number' ? formatMoney2(value) : '—'}
                         </td>
                         <td className={['num', 'mono', profitClass].filter(Boolean).join(' ')}>
-                          {typeof profitPerShare === 'number' && typeof profitPercent === 'number'
-                            ? `${formatSigned(profitPerShare, 2)} (${formatPercent(profitPercent)})`
+                          {typeof totalProfit === 'number' && typeof profitPercent === 'number'
+                            ? `${formatSigned(totalProfit, 2)} (${formatPercent(profitPercent)})`
                             : '—'}
                         </td>
                         <td className="num">

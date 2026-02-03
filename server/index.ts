@@ -232,6 +232,26 @@ async function getDividendMetadata(symbols: string[]): Promise<
     params,
   )
 
+  // 2. Get stock dividends to infer frequency if missing
+  const [allDivRows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT symbol, value, date
+     FROM stock_dividends
+     WHERE symbol IN (${names.join(', ')})
+     ORDER BY symbol, date DESC`,
+    params,
+  )
+
+  const divsBySymbol: Record<string, Array<{ date: string; value: number }>> = {}
+  for (const r of allDivRows as unknown as Array<{ symbol: unknown; value: unknown; date: unknown }>) {
+    const s = toSymbol(r.symbol)
+    if (!s) continue
+    if (!divsBySymbol[s]) divsBySymbol[s] = []
+    divsBySymbol[s].push({
+      date: String(r.date),
+      value: Number(r.value),
+    })
+  }
+
   const out: Record<
     string,
     {
@@ -240,37 +260,38 @@ async function getDividendMetadata(symbols: string[]): Promise<
     }
   > = {}
 
-  for (const r of freqRows as unknown as Array<{ symbol?: unknown; dividend_frequency?: unknown }>) {
-    const s = toSymbol(r.symbol)
-    if (s) {
-      out[s] = {
-        dividendFrequency: typeof r.dividend_frequency === 'string' ? r.dividend_frequency : null,
-        dividendPerShare: null,
-      }
+  for (const s of unique) {
+    const freqRow = (freqRows as unknown as Array<{ symbol: unknown; dividend_frequency: unknown }>).find(
+      (r) => toSymbol(r.symbol) === s,
+    )
+    let freq = typeof freqRow?.dividend_frequency === 'string' ? freqRow.dividend_frequency : null
+
+    // If DB missing frequency, infer from recent dividends
+    if (!freq && divsBySymbol[s]) {
+      const now = new Date()
+      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      const recent = divsBySymbol[s].filter((d) => new Date(d.date) >= oneYearAgo)
+      const count = recent.length
+
+      const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      const recent90 = divsBySymbol[s].filter((d) => new Date(d.date) >= threeMonthsAgo)
+
+      if (recent90.length >= 10 || count >= 40) freq = 'Weekly'
+      else if (count >= 10) freq = 'Monthly'
+      else if (count >= 3) freq = 'Quarterly'
+      else if (count >= 1) freq = 'Annually'
     }
-  }
 
-  // 2. Get latest dividend value from stock_dividends
-  const [divRows] = await pool.query<mysql.RowDataPacket[]>(
-    `SELECT symbol, value, date
-     FROM stock_dividends
-     WHERE symbol IN (${names.join(', ')})
-     ORDER BY date DESC`,
-    params,
-  )
-
-  const visitedDiv = new Set<string>()
-  for (const r of divRows as unknown as Array<{ symbol?: unknown; value?: unknown; date?: unknown }>) {
-    const s = toSymbol(r.symbol)
-    if (!s || visitedDiv.has(s)) continue
-
-    visitedDiv.add(s)
-    const val = Number(r.value)
-    if (!out[s]) {
-      out[s] = { dividendFrequency: null, dividendPerShare: null }
+    // Get latest dividend value
+    let dps: number | null = null
+    const divs = divsBySymbol[s]
+    if (divs && divs.length > 0) {
+      dps = divs[0].value
     }
-    if (Number.isFinite(val)) {
-      out[s].dividendPerShare = val
+
+    out[s] = {
+      dividendFrequency: freq,
+      dividendPerShare: dps,
     }
   }
 
@@ -1644,17 +1665,41 @@ app.get('/api/stocks/:symbol', async (req, res) => {
       const recentDivs = dividends.filter((d: any) => new Date(d.date) >= oneYearAgo)
       const count = recentDivs.length
 
-      if (count >= 10) dividendFrequency = 'Monthly'
+      const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      const recent90Divs = dividends.filter((d: any) => new Date(d.date) >= threeMonthsAgo)
+
+      if (recent90Divs.length >= 10 || count >= 40) dividendFrequency = 'Weekly'
+      else if (count >= 10) dividendFrequency = 'Monthly'
       else if (count >= 3) dividendFrequency = 'Quarterly'
       else if (count >= 1) dividendFrequency = 'Annually'
     }
 
-    if (!dividendFrequency) {
-      const [freqRows] = await pool.query<mysql.RowDataPacket[]>(
-        'SELECT dividend_frequency FROM eodhd_exchange_symbols WHERE symbol = :symbol LIMIT 1',
-        { symbol },
-      )
-      dividendFrequency = (freqRows[0] as { dividend_frequency?: string } | undefined)?.dividend_frequency ?? null
+
+    // 🔥 SAVE FREQUENCY to DB if we calculated it
+    if (dividendFrequency) {
+      // Best-effort update, don't block
+      void pool.execute(
+        `UPDATE eodhd_exchange_symbols
+         SET dividend_frequency = :freq
+         WHERE symbol = :symbol`,
+        { freq: dividendFrequency, symbol },
+      ).catch(e => console.error('Failed to save dividend frequency', e))
+    }
+
+    // Backfill dividend yield/rate from history if missing (common for ETFs like FBY)
+    const rt = realtime as any
+    if (rt && (rt.dividendRate === 0 || !rt.dividendRate) && dividends.length > 0) {
+      const now = new Date()
+      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      const recentDivs = dividends.filter((d: any) => new Date(d.date) >= oneYearAgo)
+      const totalDiv = recentDivs.reduce((sum: number, d: any) => sum + Number(d.value), 0)
+
+      if (totalDiv > 0) {
+        rt.dividendRate = totalDiv
+        if (rt.price > 0) {
+          rt.dividendYield = (totalDiv / rt.price) * 100
+        }
+      }
     }
 
     res.json({ symbol, source, realtime, eod, dividends, dividendFrequency })
@@ -2168,6 +2213,11 @@ app.delete('/api/portfolio/:id', async (req, res) => {
       res.status(400).json({ error: 'Missing id' })
       return
     }
+    // Validate ID is numeric (since DB uses INT)
+    if (!/^\d+$/.test(id)) {
+      res.status(400).json({ error: 'Invalid ID format' })
+      return
+    }
 
     const [result] = await pool.execute<mysql.ResultSetHeader>(
       'DELETE FROM portfolio_positions WHERE id = :id AND user_id = :userId',
@@ -2451,6 +2501,95 @@ app.post('/api/plans', async (req, res) => {
   }
 })
 
+// Reinvestment Execution
+app.post('/api/reinvestment/execute', async (req, res) => {
+  let connection: mysql.PoolConnection | null = null
+  try {
+    await ensureSchema()
+    const user = readSession(req)
+    if (!user) {
+      res.status(401).json({ error: 'Not authenticated' })
+      return
+    }
+
+    const { date, cost, items, weekIndex } = req.body
+    if (!date || typeof cost !== 'number' || !Array.isArray(items)) {
+      res.status(400).json({ error: 'Invalid payload' })
+      return
+    }
+
+    connection = await pool.getConnection()
+    await connection.beginTransaction()
+
+    // 1. Deduct Cash
+    await connection.execute(
+      `UPDATE dividend_cash_pool 
+       SET available_balance = available_balance - ? 
+       WHERE user_id = ?`,
+      [cost, user.id]
+    )
+
+    // 2. Add Holdings
+    for (const item of items) {
+      if (!item.symbol || typeof item.shares !== 'number') continue
+
+      // Upsert execution: if holding exists, add shares
+      // Note: We need a valid holding entry. If it doesn't exist, we create one with defaults.
+      // Default frequency: 'yearly' (safe default), include_in_reinvestment: 1
+      await connection.execute(
+        `INSERT INTO holdings (user_id, symbol, shares, dividend_per_share, dividend_frequency, include_in_reinvestment)
+         VALUES (?, ?, ?, 0, 'yearly', 1)
+         ON DUPLICATE KEY UPDATE shares = shares + ?`,
+        [user.id, item.symbol, item.shares, item.shares]
+      )
+
+      // Also track as a "Portfolio Position" (simpler table for home view)
+      // This might be redundant depending on how the app uses tables, but let's sync them for safety
+      await connection.execute(
+        `INSERT INTO portfolio_positions (user_id, symbol, amount, buy_price)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE amount = amount + ?`,
+        [user.id, item.symbol, item.shares, item.price || 0, item.shares]
+      )
+    }
+
+    // 3. Record History
+    // We create a "manual" execution record so it shows up in the timeline
+    const executionDetails = {
+      sourceScope: 'MANUAL',
+      sourceSymbols: [],
+      fractionalSharesAllowed: true,
+      details: items.map((i: any) => ({
+        symbol: i.symbol,
+        weight: 0,
+        allocatedAmount: i.shares * i.price,
+        price: i.price,
+        sharesBought: i.shares,
+        spentAmount: i.shares * i.price
+      })),
+      leftoverUnspent: 0
+    }
+
+    await connection.execute(
+      `INSERT INTO reinvestment_executions (user_id, rule_id, execution_date, week_index, total_amount, execution_details)
+       VALUES (?, 'MANUAL', ?, ?, ?, ?)`,
+      [user.id, date, weekIndex || null, cost, JSON.stringify(executionDetails)]
+    )
+
+    await connection.commit()
+
+    // Invalidate caches
+    await deleteCache(CacheKeys.portfolioEndpoint(user.id))
+
+    res.json({ success: true })
+  } catch (err) {
+    if (connection) await connection.rollback()
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Execution failed' })
+  } finally {
+    if (connection) connection.release()
+  }
+})
+
 app.get('/api/plans', async (req, res) => {
   try {
     const user = readSession(req)
@@ -2461,6 +2600,165 @@ app.get('/api/plans', async (req, res) => {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' })
   }
 })
+
+// Future Projection Simulation
+app.post('/api/simulation/project', async (req, res) => {
+  try {
+    const user = readSession(req)
+    if (!user) { res.status(401).json({ error: 'Not authenticated' }); return }
+
+    const timeframeYears = Number(req.body.timeframeYears || 10)
+    const annualReturnRate = Number(req.body.assumedAnnualReturn || 0.10) // 10% default
+
+    // 1. Fetch Active Plans
+    const plans = await listCollectionPlans(pool, user.id)
+    const activePlans = plans.filter((p: any) => p.status === 'ACTIVE')
+
+    if (activePlans.length === 0) {
+      return res.json({
+        totalInvested: 0,
+        finalPortfolioValue: 0,
+        totalShares: 0,
+        chartData: []
+      })
+    }
+
+    // 2. Fetch current prices for all symbols in plans
+    const symbols = Array.from(new Set(activePlans.map((p: any) => p.targetStock)))
+    const priceMap: Record<string, number> = {}
+
+    // Simple fetch from cache or fallback (mock if needed for speed, but let's try to get real)
+    // We can use the cached EODHD prices or Yahoo.
+    // For now, let's try to fetch active prices. 
+    // Optimization: we could implement a bulk fetcher, but loop is fine for few symbols.
+    for (const sym of symbols) {
+      try {
+        const quote = await fetchStockDataYahoo(sym)
+        priceMap[sym] = quote?.price || 100 // Fallback 100 if fail
+      } catch (e) {
+        priceMap[sym] = 100
+      }
+    }
+
+    // 3. Simulation Loop
+    let totalInvested = 0
+    let totalShares = 0 // Aggregate 'units' across different tickers (a bit abstract, but requested)
+    // Actually, 'totalShares' is less meaningful if mixed tickers (e.g. TSLA + AAPL). 
+    // But the user asked "How many shares". We'll sum them up or maybe return per-symbol?
+    // The UI mock shows "145.5 Shares" as a single number. We will sum them.
+
+    let currentPortfolioValue = 0 // Tracks value of accumulated shares
+    // We need to track share counts *per symbol* to apply price growth correctly
+    const portfolio: Record<string, number> = {} // symbol -> shareCount
+    symbols.forEach(s => portfolio[s] = 0)
+
+    const startDate = new Date()
+    const endDate = new Date(startDate)
+    endDate.setFullYear(endDate.getFullYear() + timeframeYears)
+
+    const chartData = []
+
+    // Daily return factor for compounding price
+    // (1 + annual)^ (1/365)
+    // Actually, price grows daily.
+    const dailyGrowthRate = Math.pow(1 + annualReturnRate, 1 / 365)
+
+    const currentDate = new Date(startDate)
+
+    // Simulating day by day
+    while (currentDate <= endDate) {
+      const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6
+
+      // Grow stock prices (simplified: all stocks grow at same rate)
+      // Recalculate portfolio value based on new prices?
+      // Or just grow the "Value" of holdings? 
+      // Better: Price(t) = Price(t-1) * growth.
+      // Update priceMap
+      for (const sym of symbols) {
+        priceMap[sym] *= dailyGrowthRate
+      }
+
+      // Execute Plans
+      if (!isWeekend) {
+        for (const plan of activePlans) {
+          let shouldBuy = false
+          // Logic for frequency
+          // Daily: buy every weekday
+          if (plan.frequency === 'daily') shouldBuy = true
+
+          // Weekly: buy on same day of week as StartDate? Or just Monday?
+          // Let's assume Monday (1) for simplicity if not specified
+          // Or use plan.startDate day of week?
+          // Let's use Monday for 'Weekly'.
+          if (plan.frequency === 'weekly' && currentDate.getDay() === 1) shouldBuy = true
+
+          // Monthly: buy on 1st of month?
+          if (plan.frequency === 'monthly' && currentDate.getDate() === 1) shouldBuy = true // Simplified to 1st
+
+          if (shouldBuy) {
+            // Calculate shares & cost
+            let sharesDelta = 0
+            let costDelta = 0
+            const price = priceMap[plan.targetStock]
+
+            if (plan.investmentType === 'AMOUNT') {
+              costDelta = plan.amount
+              sharesDelta = plan.amount / price
+            } else { // QUANTITY
+              sharesDelta = plan.amount
+              costDelta = plan.amount * price
+            }
+
+            // Apply
+            totalInvested += costDelta
+            portfolio[plan.targetStock] += sharesDelta
+            // Note: Value will be calculated from portfolio * currentPrice
+          }
+        }
+      }
+
+      // Record snapshot at month end (or generally every ~30 days) to keep chart data clean
+      // Or simply: if day is 1st of month
+      if (currentDate.getDate() === 1) { // Monthly snapshot
+        let val = 0
+        let shares = 0
+        for (const sym of symbols) {
+          val += portfolio[sym] * priceMap[sym]
+          shares += portfolio[sym]
+        }
+
+        chartData.push({
+          date: currentDate.toISOString().split('T')[0].substring(0, 7), // YYYY-MM
+          invested: totalInvested,
+          value: val,
+          shares: shares
+        })
+      }
+
+      // Next day
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+
+    // Final snapshot
+    let finalVal = 0
+    let finalShares = 0
+    for (const sym of symbols) {
+      finalVal += portfolio[sym] * priceMap[sym]
+      finalShares += portfolio[sym]
+    }
+
+    res.json({
+      totalInvested,
+      finalPortfolioValue: finalVal,
+      totalShares: finalShares,
+      chartData
+    })
+
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Simulation failed' })
+  }
+})
+
 
 app.patch('/api/plans/:id', async (req, res) => {
   try {

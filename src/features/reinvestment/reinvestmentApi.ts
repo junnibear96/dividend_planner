@@ -115,6 +115,26 @@ export async function fetchReinvestmentSimulationEvents(): Promise<{ events: Div
   return (await res.json()) as { events: DividendEvent[] }
 }
 
+export async function executeReinvestment(
+  payload: {
+    date: string
+    cost: number
+    items: { symbol: string; shares: number; price: number }[]
+    weekIndex?: number
+  }
+): Promise<void> {
+  const res = await fetch('/api/reinvestment/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const body = (await jsonOrNull(res)) as { error?: string } | null
+    throw new Error(body?.error ?? `Failed to execute reinvestment (${res.status})`)
+  }
+}
+
+
 // Collection Plans Types
 export type CollectionPlanFrequency = 'daily' | 'weekly' | 'monthly'
 export type CollectionPlanStatus = 'ACTIVE' | 'PAUSED'
@@ -183,4 +203,31 @@ export async function deleteCollectionPlan(planId: number): Promise<void> {
     const body = (await jsonOrNull(res)) as { error?: string } | null
     throw new Error(body?.error ?? `Failed to delete collection plan (${res.status})`)
   }
+}
+export type ProjectionResult = {
+  totalInvested: number
+  finalPortfolioValue: number
+  totalShares: number
+  chartData: {
+    date: string
+    invested: number
+    value: number
+    shares: number
+  }[]
+}
+
+export async function fetchSimulationProjection(
+  timeframeYears: number,
+  assumedAnnualReturn: number = 0.10
+): Promise<ProjectionResult> {
+  const res = await fetch('/api/simulation/project', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timeframeYears, assumedAnnualReturn }),
+  })
+  if (!res.ok) {
+    const body = (await jsonOrNull(res)) as { error?: string } | null
+    throw new Error(body?.error ?? `Failed to run simulation (${res.status})`)
+  }
+  return (await res.json()) as ProjectionResult
 }

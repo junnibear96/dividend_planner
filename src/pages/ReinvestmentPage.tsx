@@ -4,10 +4,14 @@ import { useAuth } from '../auth'
 import ReinvestmentTimelineLive from '../features/reinvestment/timeline/ReinvestmentTimelineLive'
 import CollectionPlansPanel from '../features/reinvestment/CollectionPlansPanel'
 
+import FutureProjection from '../features/reinvestment/future/FutureProjection'
+import { useState } from 'react'
+
 export default function ReinvestmentPage() {
   const { user, setUser } = useAuth()
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState<'timeline' | 'future'>('timeline')
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -44,9 +48,48 @@ export default function ReinvestmentPage() {
           </div>
         </header>
 
-        <ReinvestmentTimelineLive />
+        {/* Tab Navigation */}
+        <div className="tabs" style={{ display: 'flex', gap: '2rem', borderBottom: '1px solid var(--border-color)', marginBottom: '2rem' }}>
+          <button
+            onClick={() => setActiveTab('timeline')}
+            style={{
+              padding: '1rem 0',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'timeline' ? '2px solid var(--primary-color)' : '2px solid transparent',
+              color: activeTab === 'timeline' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              fontWeight: activeTab === 'timeline' ? 600 : 400,
+              cursor: 'pointer',
+              fontSize: '1.1rem'
+            }}
+          >
+            {t('reinvestment.tabs.timeline')}
+          </button>
+          <button
+            onClick={() => setActiveTab('future')}
+            style={{
+              padding: '1rem 0',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'future' ? '2px solid var(--primary-color)' : '2px solid transparent',
+              color: activeTab === 'future' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              fontWeight: activeTab === 'future' ? 600 : 400,
+              cursor: 'pointer',
+              fontSize: '1.1rem'
+            }}
+          >
+            {t('reinvestment.tabs.future')}
+          </button>
+        </div>
 
-        <CollectionPlansPanel />
+        {activeTab === 'timeline' ? (
+          <>
+            <ReinvestmentTimelineLive />
+            <CollectionPlansPanel />
+          </>
+        ) : (
+          <FutureProjection />
+        )}
       </div>
     </div>
   )

@@ -62,7 +62,9 @@ export function getPortfolioCache(): PortfolioPosition[] | null {
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return null
-    return parsed.map(asPosition).filter((v): v is PortfolioPosition => Boolean(v))
+    return parsed
+      .map(asPosition)
+      .filter((v): v is PortfolioPosition => v !== null && /^\d+$/.test(v.id))
   } catch {
     return null
   }

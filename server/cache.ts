@@ -35,7 +35,7 @@ export const CacheKeys = {
     userWatchlist: (userId: string) => `user:watchlist:${userId}`,
 
     // API endpoint responses (full page data) - for ultra-fast page loads
-    stockEndpoint: (symbol: string, limit: number) => `api:stock:${symbol}:${limit}`,
+    stockEndpoint: (symbol: string, limit: number) => `api:stock:${symbol}:${limit}:v2`,
     eodChartEndpoint: (symbol: string, from: string, to: string) => `api:eod:${symbol}:${from}:${to}`,
     portfolioEndpoint: (userId: string) => `api:portfolio:${userId}`,
     portfolioCashEndpoint: (userId: string) => `api:portfolio:cash:${userId}`,
