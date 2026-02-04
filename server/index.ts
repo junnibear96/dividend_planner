@@ -21,7 +21,14 @@ import {
 import { startScheduler } from './scheduler'
 import { initRedis, deleteCache } from './redis'
 import { withCacheSafe, CacheKeys, CacheTTL } from './cache'
-import { fetchStockDataYahoo, fetchStockDataBatchYahoo, fetchStockEodYahoo, fetchStockDividendsYahoo } from './yahoo'
+import {
+  fetchStockDataYahoo,
+  fetchStockDataBatchYahoo,
+  fetchStockEodYahoo,
+  fetchStockDividendsYahoo,
+  fetchFundamentalsYahoo,
+  searchSymbolsYahoo
+} from './yahoo'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -87,8 +94,8 @@ const pool = mysql.createPool({
 })
 
 const jwtSecret = requireEnv('AUTH_JWT_SECRET')
-const eodhdToken = (process.env.EODHD_API_TOKEN ?? '').trim()
-const hasEodhdToken = Boolean(eodhdToken)
+// EODHD Token removed (using Yahoo Finance)
+const hasEodhdToken = true // Mocked to true to bypass legacy checks if any remain, but we will remove the checks.
 
 function redactEodhdUrl(rawUrl: string): string {
   try {
@@ -111,97 +118,35 @@ async function eodhdFetchJson(url: string): Promise<unknown> {
 }
 
 async function fetchRealTimeFromEodhd(symbol: string): Promise<unknown> {
-  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-
-  return await withCacheSafe(
-    CacheKeys.eodhdRealtime(symbol),
-    CacheTTL.REALTIME,
-    async () => {
-      const url = `https://eodhd.com/api/real-time/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-        eodhdToken,
-      )}&fmt=json`
-      return await eodhdFetchJson(url)
-    }
-  )
+  const data = await fetchStockDataYahoo(symbol)
+  return data
 }
 
 async function fetchEodFromEodhd(symbol: string, limit: number): Promise<unknown[]> {
-  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-
-  return await withCacheSafe(
-    CacheKeys.eodhdEod(symbol, limit),
-    CacheTTL.EOD,
-    async () => {
-      const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-        eodhdToken,
-      )}&fmt=json&limit=${encodeURIComponent(String(limit))}`
-      const rows = await eodhdFetchJson(url)
-      return Array.isArray(rows) ? (rows as unknown[]) : []
-    }
-  )
+  const to = new Date()
+  const from = new Date()
+  from.setDate(from.getDate() - (limit + 10))
+  // Yahoo EOD returns array of objects, similar shape
+  return await fetchStockEodYahoo(symbol, from.toISOString().split('T')[0], to.toISOString().split('T')[0])
 }
 
 async function fetchEodRangeFromEodhd(symbol: string, from: string, to: string): Promise<unknown[]> {
-  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-
-  return await withCacheSafe(
-    CacheKeys.eodhdEodRange(symbol, from, to),
-    CacheTTL.EOD,
-    async () => {
-      const url = `https://eodhd.com/api/eod/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-        eodhdToken,
-      )}&fmt=json&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-      const rows = await eodhdFetchJson(url)
-      return Array.isArray(rows) ? (rows as unknown[]) : []
-    }
-  )
+  return await fetchStockEodYahoo(symbol, from, to)
 }
 
 async function fetchDividendsFromEodhd(symbol: string): Promise<unknown[]> {
-  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-
-  return await withCacheSafe(
-    CacheKeys.eodhdDividends(symbol),
-    CacheTTL.DIVIDENDS,
-    async () => {
-      const url = `https://eodhd.com/api/div/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-        eodhdToken,
-      )}&fmt=json`
-      const rows = await eodhdFetchJson(url)
-      return Array.isArray(rows) ? (rows as unknown[]) : []
-    }
-  )
+  return await fetchStockDividendsYahoo(symbol)
 }
 
 async function fetchFundamentalsFromEodhd(symbol: string): Promise<unknown> {
-  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-
-  return await withCacheSafe(
-    CacheKeys.eodhdFundamentals(symbol),
-    CacheTTL.FUNDAMENTALS,
-    async () => {
-      const url = `https://eodhd.com/api/fundamentals/${encodeURIComponent(symbol)}?api_token=${encodeURIComponent(
-        eodhdToken,
-      )}&fmt=json`
-      return await eodhdFetchJson(url)
-    }
-  )
+  return await fetchFundamentalsYahoo(symbol)
 }
 
 async function fetchExchangeSymbolsFromEodhd(exchange: string): Promise<unknown[]> {
-  if (!hasEodhdToken) throw new Error('Missing required env var: EODHD_API_TOKEN')
-
-  return await withCacheSafe(
-    CacheKeys.eodhdExchangeSymbols(exchange),
-    CacheTTL.SYMBOLS,
-    async () => {
-      const url = `https://eodhd.com/api/exchange-symbol-list/${encodeURIComponent(
-        exchange,
-      )}?api_token=${encodeURIComponent(eodhdToken)}&fmt=json`
-      const rows = await eodhdFetchJson(url)
-      return Array.isArray(rows) ? (rows as unknown[]) : []
-    }
-  )
+  // Yahoo does not support listing all symbols for an exchange easily.
+  // We return empty array to disable bulk caching.
+  // The app should rely on searchSymbolsYahoo directly.
+  return []
 }
 
 async function getDividendMetadata(symbols: string[]): Promise<
@@ -794,20 +739,29 @@ function extractFundamentalsMeta(payload: unknown): {
   type: string | null
   currency: string | null
 } {
-  const obj = (payload ?? {}) as Record<string, unknown>
-  const general = (obj.General ?? obj.general ?? null) as any
-  const name = typeof general?.Name === 'string' ? general.Name : typeof general?.name === 'string' ? general.name : null
-  const type = typeof general?.Type === 'string' ? general.Type : typeof general?.type === 'string' ? general.type : null
-  const currency =
-    typeof general?.CurrencyCode === 'string'
-      ? general.CurrencyCode
-      : typeof general?.Currency === 'string'
-        ? general.Currency
-        : typeof general?.currency === 'string'
-          ? general.currency
-          : null
+  const obj = (payload ?? {}) as any
 
-  return { name, type, currency }
+  // EODHD structure
+  if (obj.General || obj.general) {
+    const general = obj.General ?? obj.general
+    const name = general.Name ?? general.name ?? null
+    const type = general.Type ?? general.type ?? null
+    const currency = general.CurrencyCode ?? general.Currency ?? general.currency ?? null
+    return { name, type, currency }
+  }
+
+  // Yahoo Finance structure (quoteSummary)
+  // Modules: price, assetProfile, quoteType
+  if (obj.quoteType || obj.price) {
+    const qt = obj.quoteType ?? {}
+    const pr = obj.price ?? {}
+    const name = qt.shortName ?? qt.longName ?? pr.shortName ?? pr.longName ?? null
+    const type = qt.quoteType ?? pr.quoteType ?? null
+    const currency = pr.currency ?? qt.currency ?? null
+    return { name, type, currency }
+  }
+
+  return { name: null, type: null, currency: null }
 }
 
 function normalizeRealtimeQuote(rt: unknown): {
@@ -3051,6 +3005,59 @@ app.get('/api/symbols/search', async (req, res) => {
   }
 })
 
+// Helper to map Yahoo exchange codes to our App's exchange codes
+function mapToAppExchange(yahooEx: string): string {
+  const y = (yahooEx ?? '').toUpperCase()
+  // US Exchanges
+  if (['NYQ', 'NMS', 'NGM', 'PCX', 'OPR', 'ASE', 'NCM'].includes(y)) return 'US'
+  if (['LSE', 'L'].includes(y)) return 'LSE' // London
+  if (['TOR', 'TO'].includes(y)) return 'TO' // Toronto
+  if (['KO', 'KSC'].includes(y)) return 'KO' // Korea
+  if (['KQ', 'KOE'].includes(y)) return 'KQ' // Kosdaq
+  return y || 'US'
+}
+
+async function upsertYahooSymbols(quotes: any[]): Promise<void> {
+  const chunkSize = 100
+  const unique = new Map<string, any>()
+  for (const q of quotes) {
+    const appEx = mapToAppExchange(q.exchange)
+    // Simplify symbol logic if needed. keeping raw symbol for now.
+    const key = `${appEx}:${q.symbol}`
+    if (!unique.has(key)) {
+      unique.set(key, { ...q, appEx })
+    }
+  }
+
+  const items = Array.from(unique.values())
+  if (items.length === 0) return
+
+  for (let start = 0; start < items.length; start += chunkSize) {
+    const chunk = items.slice(start, start + chunkSize)
+    const placeholders = chunk.map(() => '(?,?,?,?,?,CURRENT_TIMESTAMP)').join(',')
+    const params: unknown[] = []
+
+    for (const r of chunk) {
+      params.push(r.appEx, r.symbol, r.name ?? '', r.type ?? '', r.currency ?? null)
+    }
+
+    try {
+      await pool.execute(
+        `INSERT INTO eodhd_exchange_symbols (exchange, symbol, name, type, currency, fetched_at)
+         VALUES ${placeholders}
+         ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           type = VALUES(type),
+           currency = VALUES(currency),
+           fetched_at = VALUES(fetched_at)`,
+        params
+      )
+    } catch (err) {
+      console.error('Failed to upsert symbols chunk', err)
+    }
+  }
+}
+
 app.get('/api/symbols', async (req, res) => {
   try {
     await ensureSchema()
@@ -3062,16 +3069,21 @@ app.get('/api/symbols', async (req, res) => {
     const limit = Math.max(1, Math.min(200, Math.floor(Number(req.query.limit ?? '100'))))
     const offset = Math.max(0, Math.min(50_000, Math.floor(Number(req.query.offset ?? '0'))))
 
-    // Cache symbol list ~7 days, but avoid hard failing if token is missing.
-    if (hasEodhdToken) {
-      await ensureExchangeSymbolsCached(exchange, 7 * 24 * 60 * 60 * 1000)
+    // 1. If we have a query, fetch from Yahoo and cache to DB first
+    if (q.length > 0) {
+      try {
+        const results = await searchSymbolsYahoo(q)
+        await upsertYahooSymbols(results)
+      } catch (e) {
+        console.error('Yahoo search failed, falling back to DB only', e)
+      }
     }
 
+    // 2. Query DB (The Table)
     const where: string[] = ['exchange = :exchange']
     const params: Record<string, unknown> = { exchange }
 
     if (q) {
-      // Symbol prefix match; name substring match.
       where.push('(symbol LIKE :symLike OR name LIKE :nameLike)')
       params.symLike = `${q}%`
       params.nameLike = `%${q}%`
@@ -3085,7 +3097,6 @@ app.get('/api/symbols', async (req, res) => {
     )
     const total = Number((countRows as any)?.[0]?.total ?? 0)
 
-    // Fetch one extra to compute hasMore without relying on total.
     const effectiveLimit = limit + 1
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
       `SELECT symbol, name, type, currency

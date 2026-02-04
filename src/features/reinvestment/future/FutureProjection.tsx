@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import FutureStats from './FutureStats'
 import FutureChart from './FutureChart'
-import { fetchSimulationProjection, ProjectionResult } from '../reinvestmentApi'
+import { fetchSimulationProjection, type ProjectionResult } from '../reinvestmentApi'
 
 export default function FutureProjection() {
     const { t } = useTranslation()

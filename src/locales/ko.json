@@ -87,7 +87,8 @@
         "noAccount": "계정이 없으신가요?",
         "registerHere": "회원가입",
         "haveAccount": "이미 계정이 있으신가요?",
-        "loginHere": "로그인"
+        "loginHere": "Login here",
+        "demoAccount": "데모 계정"
     },
     "landing": {
         "appTitle": "Dividend Planner",

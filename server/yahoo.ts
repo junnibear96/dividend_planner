@@ -184,3 +184,34 @@ export async function fetchStockDividendsYahoo(symbol: string): Promise<any[]> {
         return []
     }
 }
+
+export async function fetchFundamentalsYahoo(symbol: string): Promise<any> {
+    const ySymbol = symbol.endsWith('.US') ? symbol.slice(0, -3) : symbol
+    try {
+        log(`Fetching Fundamentals (modules) for ${ySymbol}`)
+        const result = await yahooFinance.quoteSummary(ySymbol, {
+            modules: ['assetProfile', 'quoteType', 'summaryDetail', 'defaultKeyStatistics']
+        })
+        return result
+    } catch (e) {
+        errorLog(`Fundamentals fetch failed for ${symbol}`, e)
+        return null
+    }
+}
+
+export async function searchSymbolsYahoo(query: string): Promise<any[]> {
+    try {
+        log(`Searching symbols for "${query}"`)
+        const result = await yahooFinance.search(query)
+        return result.quotes.map((q: any) => ({
+            symbol: q.symbol,
+            name: q.shortname || q.longname,
+            type: q.quoteType,
+            currency: null, // Search result often lacks currency, or it's implicitly USD for US
+            exchange: q.exchange
+        }))
+    } catch (e) {
+        errorLog(`Search failed for "${query}"`, e)
+        return []
+    }
+}

@@ -1,5 +1,4 @@
 
-import React from 'react'
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     Legend
@@ -45,7 +44,10 @@ export default function FutureChart({ data }: Props) {
                     />
                     <Tooltip
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', background: 'var(--bg-primary)' }}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
+                        formatter={(value: number | undefined) => [
+                            typeof value === 'number' ? `$${value.toLocaleString()}` : '-',
+                            ''
+                        ]}
                         labelStyle={{ color: 'var(--text-secondary)', marginBottom: '0.5rem' }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />

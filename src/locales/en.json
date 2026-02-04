@@ -87,7 +87,8 @@
         "noAccount": "Don't have an account?",
         "registerHere": "Register here",
         "haveAccount": "Already have an account?",
-        "loginHere": "Login here"
+        "loginHere": "Login here",
+        "demoAccount": "Demo Account"
     },
     "landing": {
         "appTitle": "Dividend Planner",
